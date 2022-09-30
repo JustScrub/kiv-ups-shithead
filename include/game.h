@@ -1,70 +1,84 @@
 #ifndef __SHITHEAD_GAME_H__
 #define __SHITHEAD_GAME_H__
 
-typedef unsigned char card_t;
+#include <stdbool.h>
+#include "card.h"
+#include "player.h"
 
-#define J_IDX 9
-#define Q_IDX 10
-#define K_IDX 11
-#define A_IDX 12
+#define MAX_PLAYERS 4
 
-#ifdef ANSI_COLORS
-#define ANSI_C_RED      "\u001b[31m"
-#define ANSI_RST        "\u001b[0m"
-#define ANSI_BOLD       "\u001b[1m"
-#endif
-
-/*  CARDS: number 0 - 12, times its color: 0 - 3
- * 2 - 10 => card = value - 2 (Clubs 2 = 0, Clubs 4 = 2...)
- * J, Q, K => 9,10,11
- * Ace => 12
- * 
- * value of card = card + 2 (ACE=14, Q=12, 2=2 etc...)
- */
-
-typedef enum {
-    CLUBS = 0,
-    DIAMONDS,
-    SPADES,
-    HEARTS
-} card_color_t;
-
-
-card_color_t card_get_color(card_t card);
-int card_get_value(card_t card);
-int card_game_value(card_t card);
 
 /**
- * @brief Prints the card in format <number><color_sign> to stdin
- * <number> = 2..9 | JKQA
+ * @brief States the game can be in
  * 
- * ifdef ANSI_COLORS:
- * The output uses ansi colors and bold formatting.
- * The user must reset the formatting themselves
  */
-void print_card();
-
-
-
-typedef struct {
-    card_t draw_deck[52];
-    int head;
-} card_stack_t;
-
-typedef struct {
-    int id;
-    card_t hand[52];
-    card_t face_up[3];
-    card_t face_down[3];
-} player_t;
+typedef enum {
+    GM_LOBBY,          /**< game in lobby. Owner player can start game */
+    GM_PLAYING,        /**< game is in play. */
+    GM_FINISHED        /**< Game is finished. Will be deleted soon. */
+} game_state_t;
 
 typedef struct
 {
     int id;
+    game_state_t state;
     card_stack_t *draw_deck;
     card_stack_t *play_deck;
-    player_t *players;
+    player_t **players;
+
+    bool active_8;
 }game_t;
 
+
+void game_create(player_t *owner, game_t *out);
+void game_delete(game_t *game);
+void game_init(game_t *game);
+void game_loop(game_t *game);
+
+/**
+ * @brief Check if the played card is legal.
+ * 
+ * Illegal:
+ *  - Player does not have the card.
+ *  - active 8, but player did not play 8
+ *  - if player does not have 2, 3 or 10:
+ *      - if top card is 7 and player played higher card
+ *      - top card != 7 and player played lower card
+ * 
+ * @param game 
+ * @param card 
+ * @return true 
+ * @return false 
+ */
+bool game_check_legal(game_t *game, card_t card);
+
+/**
+ * @brief Checks if the player at the specified index is able to make a move
+ * 
+ * Not able when:
+ *  - the 8 on top is active and the player has no 8
+ *      - if this is the reason, inactivates the 8 automatically
+ *  - if player does not have 2, 3 or 10:
+ *      - if top card is 7 and player has only higher cards
+ *      - top card != 7 and player only has lower cards
+ * 
+ * @param game 
+ * @param player_idx 
+ * @return int 
+ */
+bool game_check_can_play(game_t *game, int player_idx);
+
+/**
+ * @brief Checks if the play pile is to be burned
+ * 
+ * To be burned if:
+ *  - 10 on top
+ *  - 4 consecutive card values
+ * 
+ * @param game 
+ * @return true 
+ * @return false 
+ */
+bool game_check_burn_pile(game_t *game);
 
 #endif
