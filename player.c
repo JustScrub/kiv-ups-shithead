@@ -6,5 +6,5 @@ void player_create(player_t *out)
 {
     out->id = ++pl_id;
     out->game_id = -1;
-    out->state = MAIN_MENU;
+    out->state = PL_MAIN_MENU;
 }

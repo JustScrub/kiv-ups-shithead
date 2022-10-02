@@ -13,7 +13,8 @@
  * 
  */
 typedef enum {
-    GM_LOBBY,          /**< game in lobby. Owner player can start game */
+    GM_LOBBY = 0,          /**< game in lobby. Owner player can start game */
+    GM_PREPARE,        /**< Players trading cards */
     GM_PLAYING,        /**< game is in play. */
     GM_FINISHED        /**< Game is finished. Will be deleted soon. */
 } game_state_t;
@@ -39,7 +40,7 @@ void game_loop(game_t *game);
  * @brief Check if the played card is legal.
  * 
  * Illegal:
- *  - Player does not have the card.
+ *  - Player does not have the card(s).
  *  - active 8, but player did not play 8
  *  - if player does not have 2, 3 or 10:
  *      - if top card is 7 and player played higher card
