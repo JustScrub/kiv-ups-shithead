@@ -95,48 +95,34 @@ card_t game_get_top_card(game_t *game)
     return card_stack_peek(game->play_deck,i);
 }
 
-int game_player_card_cnt(player_t *player)
+bool game_check_legal(game_t *game, player_t *player, card_t card)
 {
-    int s = 0;
-    for(int i=0;i<52;i++)
+    // best choice here is decision tree.
+    // Well, I'm lazy for that.
+    // Best I can do is if-else (-:
+
+    int cval = card_game_value(card);
+    int topval = card_game_value(game_get_top_card(game));
+    if(game->active_8)
     {
-        s += player->hand[i];
+        if(cval==8) goto check_has;
     }
-    return s;
-}
+    else if(cval == 2 || cval == 3 || cval == 10)
+    {
+        goto check_has;
+    }
+    else if(topval == 7)
+    {
+        if(cval <= 7) goto check_has; 
+    }
+    else if(cval >= topval)
+    {
+        goto check_has;
+    }
+    return false;
 
-/**
- * @brief Checks if player has card and returns 0 iff not, else a positive int
- * 
- * return values: 0=does not have, 1=hand, 2=f-up, 3=f-down
- * 
- * @param player 
- * @param card_idx = value returned by \c card_get_value(card)
- * @return int 
- */
-int game_player_has_card(player_t *player, char card_idx)
-{
-    // too lazy to make loops. Sry ¯\_(ツ)_/¯
-    if(
-        player->hand[card_idx   ] ||
-        player->hand[card_idx+13] ||
-        player->hand[card_idx+26] ||
-        player->hand[card_idx+39]
-    ) return 1;
-
-    if(
-        card_get_value( player->face_up[0] ) == card_idx ||
-        card_get_value( player->face_up[1] ) == card_idx ||
-        card_get_value( player->face_up[2] ) == card_idx
-    ) return 2;
-
-    if(
-        card_get_value( player->face_down[0] ) == card_idx ||
-        card_get_value( player->face_down[1] ) == card_idx ||
-        card_get_value( player->face_down[2] ) == card_idx
-    ) return 3;
-
-    return 0;
+    check_has:
+    return player_plays_from(player) == player_has_card(player, card_get_value(card));
 }
 
 void game_loop(game_t *game)
@@ -145,35 +131,16 @@ void game_loop(game_t *game)
     card_t card;
 
     // Players trading
-    for(curr_player = 0; curr_player<MAX_PLAYERS; curr_player++)
+    for(curr_player = 0; curr_player < MAX_PLAYERS; curr_player++)
     {
-        game->players[curr_player]->comm_if->rq_trade();
-    }
-    for(curr_player = 0; curr_player<MAX_PLAYERS; curr_player++)
-    {
-        game->players[curr_player]->comm_if->read_trade(&j);
-        for(int i=0; i<3; i++)
-        {
-            card = ((card_t *)j)[i];
-            if(card == INVALID_CARD) continue;
-            if(game_player_has_card(game->players[curr_player], card_get_value(card)) != 1)
-            {
-                game->players[curr_player]->comm_if->write("You don't have that card");
-                break; //tries to cheat -> cannot trade
-            }
-
-            // switching
-            game->players[curr_player]->hand[game->players[curr_player]->face_up[i]] = true;
-            game->players[curr_player]->hand[card] = false;
-            game->players[curr_player]->face_up[i] = card;
-        }
+        if(game->players[curr_player]) player_trade_cards(game->players[curr_player]);
     }
 
     // first player: left-to-right, who has 3 in hand starts first. if no 3, then 4 etc...
     j=1; // 1 maps to game value 3
     for (curr_player = 0; curr_player < MAX_PLAYERS; j++, curr_player++)
     {
-        if(game_player_has_card(game->players[curr_player],j) == 1) break;
+        if(player_has_card(game->players[curr_player],j) == 1) break;
     }
     
     // game start
@@ -182,6 +149,12 @@ void game_loop(game_t *game)
     for(;; curr_player++, curr_player %= MAX_PLAYERS)
     {
         if(!game->players[curr_player]) continue;
+        if(game->players[curr_player]->state == PL_DONE) 
+        {
+            game->players[curr_player] = NULL;
+            continue;
+        }
+
         // show top card
         game->players[curr_player]->comm_if->tell_top(game_get_top_card(game));
 
@@ -196,7 +169,7 @@ void game_loop(game_t *game)
         legal_check: 
         game->players[curr_player]->comm_if->rq_card();
         card = game->players[curr_player]->comm_if->read_card(&j);
-        while(!game_check_legal(game, card))
+        while(!game_check_legal(game, game->players[curr_player], card))
         {
             game->players[curr_player]->comm_if->write("Illegal card(s). Choose again.");
             game->players[curr_player]->comm_if->rq_card();
@@ -219,11 +192,16 @@ void game_loop(game_t *game)
         }
 
         // draw cards
-        int cnt = game_player_card_cnt(game->players[curr_player]);
+        int cnt = player_hand_card_cnt(game->players[curr_player]);
         for(int i=3; i > 0, card_stack_peek(game->draw_deck, 0) != INVALID_CARD; i--, cnt++)
         {
             if (cnt >= 3) break; 
             game->players[curr_player]->hand[card_stack_pop(game->draw_deck)] = true;
+        }
+
+        if(!player_plays_from(game->players[curr_player]))
+        {
+            game->players[curr_player]->comm_if->write("Congrats, you won!");
         }
 
         cannot_play: 

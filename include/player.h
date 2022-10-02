@@ -45,4 +45,20 @@ typedef struct {
 
 void player_create(player_t *out);
 
+int player_hand_card_cnt(player_t *player);
+int player_has_card(player_t *player, char card_idx);
+void player_trade_cards(player_t *player);
+
+/**
+ * @brief Gets, whether player should play from hand, face-up cards or face-down cards.
+ * 
+ * 1 = hand
+ * 2 = f-u
+ * 3 = f-d
+ * 0 = player won
+ * 
+ * @param player 
+ * @return int 
+ */
+int player_plays_from(player_t *player);
 #endif

@@ -47,11 +47,12 @@ void game_loop(game_t *game);
  *      - top card != 7 and player played lower card
  * 
  * @param game 
+ * @param player
  * @param card 
  * @return true 
  * @return false 
  */
-bool game_check_legal(game_t *game, card_t card);
+bool game_check_legal(game_t *game, player_t *player, card_t card);
 
 /**
  * @brief Checks if the player at the specified index is able to make a move
