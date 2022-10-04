@@ -2,11 +2,12 @@
 #include "include/card.h"
 #include "include/player.h"
 #include <stdlib.h>
+#include <stdio.h>
 #include <stddef.h>
 #include <stdbool.h>
 
 
-static gm_id = 0;
+static int gm_id = 0;
 
 void game_create(player_t *owner, game_t *out)
 {
@@ -17,6 +18,20 @@ void game_create(player_t *owner, game_t *out)
     out->players = calloc(MAX_PLAYERS,sizeof(player_t *));
     out->players[0] = owner;
     owner->game_id = out->id;
+}
+
+bool game_add_player(game_t *game,player_t *pl)
+{
+    int i;
+    for(i=1;i<MAX_PLAYERS, game->players[i];i++);
+
+    if(i<=MAX_PLAYERS)
+    {
+        game->players[i] = pl;
+        pl->game_id = game->id;
+        return true;
+    }
+    return false;
 }
 
 void game_delete(game_t *game)
@@ -37,9 +52,9 @@ void game_delete(game_t *game)
 void game_init(game_t *game)
 {
     // fill cards + shuffle
-    for(card_t card = 0; card < 52; card++)
+    for(int i=0; i < DECK_NUM*52 ;i++)
     {
-        card_stack_push(game->draw_deck, card);
+        card_stack_push(game->draw_deck, (i%13)+2);
     }
     card_stack_shuffle(game->draw_deck);
 
@@ -50,7 +65,7 @@ void game_init(game_t *game)
     int sizes[] = {3,3};
 
     // draw face up/down cards
-    for(int i=0; i <3 /*u*/; i++)
+    for(int i=0; i<2; i++)
     {
         for(int draw_idx = 0; draw_idx < sizes[i]; draw_idx++)
         {
@@ -66,13 +81,13 @@ void game_init(game_t *game)
         }
     }
 
-    for(int i=0;i<3;i++)
+    for(int i=0;  i <3 /*u*/  ;i++)
     {
         for(int p=0; p <MAX_PLAYERS; p++)
             {
                 if(game->players[p])
                 {
-                    game->players[p]->hand[card_stack_pop(game->draw_deck)] = true;
+                    player_draw_cards(game->players[p],3,game->draw_deck);
                 }
             }
     }
@@ -84,51 +99,98 @@ void game_init(game_t *game)
         // lazy eval -> if the addr is NULL, skips the assignment
     }
 
+    game->active_8 = false;
     game->state = GM_PREPARE;
 }
 
 card_t game_get_top_card(game_t *game)
 {
     int i;
-    for(i=0; card_game_value(card_stack_peek(game->play_deck,i))==3; i++)
+    for(i=0; card_stack_peek(game->play_deck,i)==3; i++)
         ;
     return card_stack_peek(game->play_deck,i);
 }
 
-bool game_check_legal(game_t *game, player_t *player, card_t card)
+int game_check_cannot_play(game_t *game, int player_idx)
+{
+    //check for 8
+    if(game->active_8 && !player_has_card(game->players[player_idx],8,1))
+        return 1;
+    
+    // check for 2,3,10
+    if(player_has_card(game->players[player_idx],2,1) ||
+       player_has_card(game->players[player_idx],3,1) ||
+       player_has_card(game->players[player_idx],10,1)
+    )
+        return 0;
+
+    // case 7 is on top
+    if(game_get_top_card(game) == 7)
+    {
+        for(card_t card= 2; card <= 7; card++)
+        {
+            if(player_has_card(game->players[player_idx],card,1))
+                return 0;
+        }
+    }
+    // other cards
+    else
+    {
+        for(card_t card= game_get_top_card(game); card <= A_VAL; card++)
+        {
+            if(player_has_card(game->players[player_idx],card,1))
+                return 0;
+        }
+    }
+
+    return 2;
+}
+
+bool game_check_burn_pile(game_t *game)
+{
+    card_t c = game_get_top_card(game);
+    if(!card_is_valid(c)) return false;
+    if ( c == 10) return true;
+    for(int i=1;i<4;i++)
+    {
+        if( card_stack_peek(game->play_deck, i) != c) return false;
+    }
+    return true;
+}
+
+bool game_check_legal(game_t *game, player_t *player, card_t card, int cnt)
 {
     // best choice here is decision tree.
     // Well, I'm lazy for that.
     // Best I can do is if-else (-:
 
-    int cval = card_game_value(card);
-    int topval = card_game_value(game_get_top_card(game));
+    int top = game_get_top_card(game);
     if(game->active_8)
     {
-        if(cval==8) goto check_has;
+        if(card==8) goto check_has;
     }
-    else if(cval == 2 || cval == 3 || cval == 10)
+    else if(card == 2 || card == 3 || card == 10)
     {
         goto check_has;
     }
-    else if(topval == 7)
+    else if(top == 7)
     {
-        if(cval <= 7) goto check_has; 
+        if(card <= 7) goto check_has; 
     }
-    else if(cval >= topval)
+    else if(card >= top)
     {
         goto check_has;
     }
     return false;
 
     check_has:
-    return player_plays_from(player) == player_has_card(player, card_get_value(card));
+    return player_plays_from(player) == player_has_card(player, card, cnt);
 }
 
 void game_loop(game_t *game)
 {
     int curr_player = 0, j;
-    card_t card;
+    card_t card = INVALID_CARD;
 
     // Players trading
     for(curr_player = 0; curr_player < MAX_PLAYERS; curr_player++)
@@ -137,10 +199,10 @@ void game_loop(game_t *game)
     }
 
     // first player: left-to-right, who has 3 in hand starts first. if no 3, then 4 etc...
-    j=1; // 1 maps to game value 3
+    j=3;
     for (curr_player = 0; curr_player < MAX_PLAYERS; j++, curr_player++)
     {
-        if(player_has_card(game->players[curr_player],j) == 1) break;
+        if(player_has_card(game->players[curr_player],j,1)) break;
     }
     
     // game start
@@ -157,11 +219,16 @@ void game_loop(game_t *game)
 
         // show top card
         game->players[curr_player]->comm_if->tell_top(game_get_top_card(game));
+        game->players[curr_player]->comm_if->tell_cards(game->players[curr_player]->hand, game->players[curr_player]->face_up);
 
         // check if player can play
-        if(!game_check_can_play(game, curr_player))
+        if(!(j=game_check_cannot_play(game, curr_player)))
         {
             game->players[curr_player]->comm_if->write("You cannot play at the moment.");
+            if(j==1) game->active_8 = false;
+            else{
+                player_draw_cards( game->players[curr_player], card_stack_height(game->play_deck), game->play_deck);
+            }
             goto cannot_play;
         }
 
@@ -169,35 +236,30 @@ void game_loop(game_t *game)
         legal_check: 
         game->players[curr_player]->comm_if->rq_card();
         card = game->players[curr_player]->comm_if->read_card(&j);
-        while(!game_check_legal(game, game->players[curr_player], card))
+        while(!game_check_legal(game, game->players[curr_player], card,j))
         {
             game->players[curr_player]->comm_if->write("Illegal card(s). Choose again.");
             game->players[curr_player]->comm_if->rq_card();
             card = game->players[curr_player]->comm_if->read_card(&j);
         }
 
-        // put the card(s) on top of the deck
-        for(;j>0;j--)
-            card_stack_push(game->play_deck,card);
-
+        // Play the player's cards
+        player_play_cards(game->players[curr_player], card, j, game->play_deck);
         // check for 8 or pile burn
-        if(card_game_value(card) == 8)
+        if(game_get_top_card(game) == 8)
         {
             game->active_8 = true;
         }
         if(game_check_burn_pile(game))
         {
+            game->active_8 = false;
             card_stack_clear(game->play_deck);
             goto legal_check; // plays again
         }
 
         // draw cards
-        int cnt = player_hand_card_cnt(game->players[curr_player]);
-        for(int i=3; i > 0, card_stack_peek(game->draw_deck, 0) != INVALID_CARD; i--, cnt++)
-        {
-            if (cnt >= 3) break; 
-            game->players[curr_player]->hand[card_stack_pop(game->draw_deck)] = true;
-        }
+        j = player_hand_card_cnt(game->players[curr_player]);
+        player_draw_cards(game->players[curr_player], 3-j, game->draw_deck);
 
         if(!player_plays_from(game->players[curr_player]))
         {
@@ -205,6 +267,7 @@ void game_loop(game_t *game)
         }
 
         cannot_play: 
+        ;
     }
 }
 

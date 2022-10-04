@@ -1,19 +1,8 @@
 #include "include/card.h"
 #include <stdio.h>
+#include <stdlib.h>
 
-card_color_t card_get_color(card_t card)
-{
-    return card/13;
-}
-
-int card_get_value(card_t card){
-    return card == INVALID_CARD? INVALID_CARD_VAL : card%13;
-}
-int card_game_value(card_t card)
-{
-    return card == INVALID_CARD? INVALID_CARD_VAL : card_get_value(card)+2;
-}
-
+/*
 void print_card(card_t card)
 {
     //char chars[] = "♣♦♠♥JQKA";
@@ -46,7 +35,7 @@ void print_card(card_t card)
 
     printf("%s%c", card_disp, chars[card_get_color(card)]);
 }
-
+*/
 
 card_stack_t *card_stack_create()
 {
@@ -66,7 +55,15 @@ void card_stack_push(card_stack_t *stack, card_t card)
 {
     stack->deck[(stack->head)++] = card;
 }
+int card_stack_height(card_stack_t *stack)
+{
+    return stack->head;
+}
 
+void card_stack_shuffle(card_stack_t *stack)
+{
+    return;
+}
 
 void card_stack_clear(card_stack_t *stack)
 {

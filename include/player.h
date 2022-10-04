@@ -4,8 +4,13 @@
 #include "card.h"
 #include <stdbool.h>
 
+#define PL_PILE_HAND 1
+#define PL_PILE_F_UP 2
+#define PL_PILE_F_DWN 3
+#define PL_PILE_NONE 0
+
 /**
- * @brief States theplayer can be in
+ * @brief States the player can be in
  * 
  */
 typedef enum {
@@ -30,13 +35,14 @@ typedef struct {
                                             unchanged cards are represented by 0xFF - last byte always 0xFF) */
     void   (*write)(char *);            /**< Write a message to the player */
     void   (*tell_top)(card_t);         /**< Tell the player the top card */
+    void   (*tell_cards)(int *h, card_t *f_d); /**< Tell player their cards */
 } player_comm_if_t;
 
 typedef struct {
     int id;
     int game_id;
     player_state_t state;
-    bool hand[52];          /**< true if the player has card indicated by index */
+    int hand[12];          /**< number of cards of value i on index i */
     card_t face_up[3];
     card_t face_down[3];
 
@@ -46,7 +52,15 @@ typedef struct {
 void player_create(player_t *out);
 
 int player_hand_card_cnt(player_t *player);
-int player_has_card(player_t *player, char card_idx);
+/**
+ * @brief Checks if player has at least \c cnt of a specific card value
+ * 
+ * @param player 
+ * @param card_idx
+ * @param cnt 
+ * @return int 
+ */
+bool player_has_card(player_t *player, card_t card, int cnt);
 void player_trade_cards(player_t *player);
 
 /**
@@ -61,4 +75,8 @@ void player_trade_cards(player_t *player);
  * @return int 
  */
 int player_plays_from(player_t *player);
+
+bool player_play_cards(player_t *player, card_t card, int cnt, card_stack_t *play_deck);
+bool player_draw_cards(player_t *player, int cnt, card_stack_t *draw_deck);
+
 #endif
