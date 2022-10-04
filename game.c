@@ -194,7 +194,7 @@ int game_check_illegal(game_t *game, player_t *player, card_t card, int cnt)
 
 void game_loop(game_t *game)
 {
-    int curr_player = 0, j;
+    int curr_player = 0, j, reason;
     card_t card = INVALID_CARD;
     player_t *player;
 
@@ -208,6 +208,7 @@ void game_loop(game_t *game)
     j=3;
     for (curr_player = 0; curr_player < MAX_PLAYERS; j++, curr_player++)
     {
+        if(!game->players[curr_player]) continue;
         if(player_has_card(game->players[curr_player],j,1)) break;
     }
     
@@ -234,10 +235,10 @@ void game_loop(game_t *game)
             );
 
         // check if player cannot play
-        if((j=game_check_cannot_play(game, player)))
+        if((reason=game_check_cannot_play(game, player)))
         {
             player->comm_if->write("You cannot play at the moment.");
-            if(j==1) game->active_8 = false;
+            if(reason==1) game->active_8 = false;
             else{
                 player_draw_cards( player, card_stack_height(game->play_deck), game->play_deck);
             }
@@ -249,9 +250,9 @@ void game_loop(game_t *game)
         player->comm_if->rq_card();
         card = player->comm_if->read_card(&j);
         if(player_plays_from(player) == PL_PILE_F_DWN) card = player->face_down[card];
-        while((j=game_check_illegal(game, player, card,j)))
+        while((reason=game_check_illegal(game, player, card,j)))
         {
-            if(j==1) // player chose bad card
+            if(reason==1) // player chose bad card
             {
                 player->comm_if->write("Illegal card(s). Choose again.");
                 player->comm_if->rq_card();

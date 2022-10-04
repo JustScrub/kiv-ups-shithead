@@ -101,7 +101,7 @@ int main()
     game_t *game;
     game_create(&players[0],game);
     game_add_player(game, players+1);
-    game_add_player(game, players+2);
+    //game_add_player(game, players+2);
 
     game_init(game);
 
