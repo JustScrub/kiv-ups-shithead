@@ -36,7 +36,7 @@ void game_init(game_t *game);
 void game_loop(game_t *game);
 
 /**
- * @brief Check if the played card is legal.
+ * @brief Check if the played card is illegal.
  * 
  * Illegal:
  *  - Player does not have the card(s).
@@ -45,16 +45,19 @@ void game_loop(game_t *game);
  *      - if top card is 7 and player played higher card
  *      - top card != 7 and player played lower card
  * 
+ * return values:
+ * 0=legal
+ * 1=played from hand or face-up (player was idiot)
+ * 2=played form face-down (player did not know)
+ * 
  * @param game 
  * @param player
  * @param card 
- * @return true 
- * @return false 
  */
-bool game_check_legal(game_t *game, player_t *player, card_t card, int cnt);
+int game_check_illegal(game_t *game, player_t *player, card_t card, int cnt);
 
 /**
- * @brief Checks if the player at the specified index is able to make a move
+ * @brief Checks if the player is able to make a move
  * 
  * Not able when:
  *  - the 8 on top is active and the player has no 8
@@ -71,7 +74,7 @@ bool game_check_legal(game_t *game, player_t *player, card_t card, int cnt);
  * @param player_idx 
  * @return reason
  */
-int game_check_cannot_play(game_t *game, int player_idx);
+int game_check_cannot_play(game_t *game, player_t *player);
 
 /**
  * @brief Checks if the play pile is to be burned

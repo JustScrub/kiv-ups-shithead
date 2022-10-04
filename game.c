@@ -81,16 +81,13 @@ void game_init(game_t *game)
         }
     }
 
-    for(int i=0;  i <3 /*u*/  ;i++)
-    {
-        for(int p=0; p <MAX_PLAYERS; p++)
+    for(int p=0; p <MAX_PLAYERS; p++)
+        {
+            if(game->players[p])
             {
-                if(game->players[p])
-                {
-                    player_draw_cards(game->players[p],3,game->draw_deck);
-                }
+                player_draw_cards(game->players[p],3,game->draw_deck);
             }
-    }
+        }
 
     for (int p=0;p<MAX_PLAYERS; p++)
     {
@@ -111,34 +108,41 @@ card_t game_get_top_card(game_t *game)
     return card_stack_peek(game->play_deck,i);
 }
 
-int game_check_cannot_play(game_t *game, int player_idx)
+int game_check_cannot_play(game_t *game, player_t *player)
 {
+    card_t card = game_get_top_card(game);
+    if(!card_is_valid(card)) return 0;
+
+    // if plays from face-down, can always play
+    // whether the chosen card is legal is decided later on
+    if(player_plays_from(player) == PL_PILE_F_DWN) return 0;
+
     //check for 8
-    if(game->active_8 && !player_has_card(game->players[player_idx],8,1))
+    if(game->active_8 && !player_has_card(player,8,1))
         return 1;
     
     // check for 2,3,10
-    if(player_has_card(game->players[player_idx],2,1) ||
-       player_has_card(game->players[player_idx],3,1) ||
-       player_has_card(game->players[player_idx],10,1)
+    if(player_has_card(player,2,1) ||
+       player_has_card(player,3,1) ||
+       player_has_card(player,10,1)
     )
         return 0;
 
     // case 7 is on top
-    if(game_get_top_card(game) == 7)
+    if(card == 7)
     {
-        for(card_t card= 2; card <= 7; card++)
+        for(card= 2; card <= 7; card++)
         {
-            if(player_has_card(game->players[player_idx],card,1))
+            if(player_has_card(player,card,1))
                 return 0;
         }
     }
     // other cards
     else
     {
-        for(card_t card= game_get_top_card(game); card <= A_VAL; card++)
+        for(; card <= A_VAL; card++)
         {
-            if(player_has_card(game->players[player_idx],card,1))
+            if(player_has_card(player,card,1))
                 return 0;
         }
     }
@@ -158,12 +162,13 @@ bool game_check_burn_pile(game_t *game)
     return true;
 }
 
-bool game_check_legal(game_t *game, player_t *player, card_t card, int cnt)
+int game_check_illegal(game_t *game, player_t *player, card_t card, int cnt)
 {
     // best choice here is decision tree.
     // Well, I'm lazy for that.
     // Best I can do is if-else (-:
 
+    int reason = (player_plays_from(player) == PL_PILE_F_DWN)+1;
     int top = game_get_top_card(game);
     if(game->active_8)
     {
@@ -181,16 +186,17 @@ bool game_check_legal(game_t *game, player_t *player, card_t card, int cnt)
     {
         goto check_has;
     }
-    return false;
+    return reason;
 
     check_has:
-    return player_plays_from(player) == player_has_card(player, card, cnt);
+        return player_has_card(player, card, cnt)? 0 : reason;
 }
 
 void game_loop(game_t *game)
 {
     int curr_player = 0, j;
     card_t card = INVALID_CARD;
+    player_t *player;
 
     // Players trading
     for(curr_player = 0; curr_player < MAX_PLAYERS; curr_player++)
@@ -217,34 +223,61 @@ void game_loop(game_t *game)
             continue;
         }
 
-        // show top card
-        game->players[curr_player]->comm_if->tell_top(game_get_top_card(game));
-        game->players[curr_player]->comm_if->tell_cards(game->players[curr_player]->hand, game->players[curr_player]->face_up);
+        player = game->players[curr_player];
 
-        // check if player can play
-        if(!(j=game_check_cannot_play(game, curr_player)))
+        // show top card
+        player->comm_if->tell_top(game_get_top_card(game));
+        player->comm_if->tell_cards(
+            player->hand, 
+            player->face_up,
+            player_secret_face_down(player)
+            );
+
+        // check if player cannot play
+        if((j=game_check_cannot_play(game, player)))
         {
-            game->players[curr_player]->comm_if->write("You cannot play at the moment.");
+            player->comm_if->write("You cannot play at the moment.");
             if(j==1) game->active_8 = false;
             else{
-                player_draw_cards( game->players[curr_player], card_stack_height(game->play_deck), game->play_deck);
+                player_draw_cards( player, card_stack_height(game->play_deck), game->play_deck);
             }
             goto cannot_play;
         }
 
         // wait till player plays valid card
         legal_check: 
-        game->players[curr_player]->comm_if->rq_card();
-        card = game->players[curr_player]->comm_if->read_card(&j);
-        while(!game_check_legal(game, game->players[curr_player], card,j))
+        player->comm_if->rq_card();
+        card = player->comm_if->read_card(&j);
+        if(player_plays_from(player) == PL_PILE_F_DWN) card = player->face_down[card];
+        while((j=game_check_illegal(game, player, card,j)))
         {
-            game->players[curr_player]->comm_if->write("Illegal card(s). Choose again.");
-            game->players[curr_player]->comm_if->rq_card();
-            card = game->players[curr_player]->comm_if->read_card(&j);
+            if(j==1) // player chose bad card
+            {
+                player->comm_if->write("Illegal card(s). Choose again.");
+                player->comm_if->rq_card();
+                card = player->comm_if->read_card(&j);
+            }
+            else // played from face-down -> could not know result
+            {
+                player_put_to_hand(player, card);
+                // if 8 is active and the random card was not an 8,
+                // the 8 procs, passing to another person
+                // but since the player saw their face-down card, it stays in their hand
+                // if 8 is not active though, the player takes the whole playing deck to their hand
+                // (along with the now revealed card)
+                if(!game->active_8)
+                {
+                    player_draw_cards( player, card_stack_height(game->play_deck), game->play_deck);
+                }
+                else game->active_8 = false;
+
+                goto cannot_play;
+            }
+            
         }
 
         // Play the player's cards
-        player_play_cards(game->players[curr_player], card, j, game->play_deck);
+        player_play_cards(player, card, j, game->play_deck);
         // check for 8 or pile burn
         if(game_get_top_card(game) == 8)
         {
@@ -258,12 +291,12 @@ void game_loop(game_t *game)
         }
 
         // draw cards
-        j = player_hand_card_cnt(game->players[curr_player]);
-        player_draw_cards(game->players[curr_player], 3-j, game->draw_deck);
+        j = player_hand_card_cnt(player);
+        player_draw_cards(player, 3-j, game->draw_deck);
 
-        if(!player_plays_from(game->players[curr_player]))
+        if(!player_plays_from(player))
         {
-            game->players[curr_player]->comm_if->write("Congrats, you won!");
+            player->comm_if->write("Congrats, you won!");
         }
 
         cannot_play: 

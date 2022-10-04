@@ -27,7 +27,9 @@ typedef enum {
  * 
  */
 typedef struct {
-    card_t (*read_card)(int *cnt);      /**< Read which card was played (and how many of them) */
+    card_t (*read_card)(int *cnt);      /**< Read which card was played (and how many of them). 
+                                             If the player plays from face-down cards, then the
+                                             return value is the index of the face-down card (i.e. 0 for first face-down etc.) */
     void   (*rq_card)();                /**< Request a card */
     void   (*rq_trade)();               /**< Start trading cards */
     void   (*read_trade)(int *bfr);     /**< Read what cards the player switched 
@@ -35,14 +37,14 @@ typedef struct {
                                             unchanged cards are represented by 0xFF - last byte always 0xFF) */
     void   (*write)(char *);            /**< Write a message to the player */
     void   (*tell_top)(card_t);         /**< Tell the player the top card */
-    void   (*tell_cards)(int *h, card_t *f_d); /**< Tell player their cards */
+    void   (*tell_cards)(int *h, card_t *f_u, char f_d); /**< Tell player their cards */
 } player_comm_if_t;
 
 typedef struct {
     int id;
     int game_id;
     player_state_t state;
-    int hand[12];          /**< number of cards of value i on index i */
+    int hand[13];          /**< number of cards of value i on index i */
     card_t face_up[3];
     card_t face_down[3];
 
@@ -78,5 +80,7 @@ int player_plays_from(player_t *player);
 
 bool player_play_cards(player_t *player, card_t card, int cnt, card_stack_t *play_deck);
 bool player_draw_cards(player_t *player, int cnt, card_stack_t *draw_deck);
+char player_secret_face_down(player_t *player);
+void player_put_to_hand(player_t *player, int f_down_idx);
 
 #endif

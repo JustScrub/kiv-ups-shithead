@@ -3,6 +3,7 @@
 #include "include/player.h"
 
 #include <stdio.h>
+#include <string.h>
 
 card_t read_card(int *cnt)
 {
@@ -53,18 +54,24 @@ void tell_top(card_t c)
     printf("\n");
 }
 
-void tell_cards(int *h, card_t *f)
+void tell_cards(int *h, card_t *f, char d_mask)
 {
     printf("Hand: \n");
-    for(int i=0;i<12;i++)
+    for(int i=0;i<13;i++)
     {
-        if(h[i]) printf("%dx%d ",h[i], i);
+        if(h[i]) printf("%dx%d ",h[i], i+2);
     }
 
     printf("\nFace-Up: \n");
     for(int i=0;i<3;i++)
     {
         printf("%d ",f[i]);
+    }
+
+    printf("\nFace Down: \n");
+    for(int i=0;i<3;i++)
+    {
+        printf("%c",d_mask&(1<<i) ? '?': ' ');
     }
 
     printf("\n");
@@ -97,6 +104,10 @@ int main()
     game_add_player(game, players+2);
 
     game_init(game);
+
+    game->draw_deck->head = 0;
+    memset(game->players[1]->hand,0,13*sizeof(int));
+
     game_loop(game);
 
     return 0;
