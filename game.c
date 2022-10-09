@@ -29,6 +29,7 @@ bool game_add_player(game_t *game,player_t *pl)
     {
         game->players[i] = pl;
         pl->game_id = game->id;
+        pl->state = PL_LOBBY;
         return true;
     }
     return false;
@@ -227,8 +228,9 @@ void game_loop(game_t *game)
         player = game->players[curr_player];
 
         // show top card
-        player->comm_if->tell_top(game_get_top_card(game));
+        player->comm_if->tell_top(player->comm_if->cd, game_get_top_card(game));
         player->comm_if->tell_cards(
+            player->comm_if->cd,
             player->hand, 
             player->face_up,
             player_secret_face_down(player)
@@ -237,7 +239,7 @@ void game_loop(game_t *game)
         // check if player cannot play
         if((reason=game_check_cannot_play(game, player)))
         {
-            player->comm_if->write("You cannot play at the moment.");
+            player->comm_if->write(player->comm_if->cd,"You cannot play at the moment.");
             if(reason==1) game->active_8 = false;
             else{
                 player_draw_cards( player, card_stack_height(game->play_deck), game->play_deck);
@@ -247,16 +249,16 @@ void game_loop(game_t *game)
 
         // wait till player plays valid card
         legal_check: 
-        player->comm_if->rq_card();
-        card = player->comm_if->read_card(&j);
+        player->comm_if->rq_card(player->comm_if->cd);
+        card = player->comm_if->read_card(player->comm_if->cd,&j);
         if(player_plays_from(player) == PL_PILE_F_DWN) card = player->face_down[card];
         while((reason=game_check_illegal(game, player, card,j)))
         {
             if(reason==1) // player chose bad card
             {
-                player->comm_if->write("Illegal card(s). Choose again.");
-                player->comm_if->rq_card();
-                card = player->comm_if->read_card(&j);
+                player->comm_if->write(player->comm_if->cd,"Illegal card(s). Choose again.");
+                player->comm_if->rq_card(player->comm_if->cd);
+                card = player->comm_if->read_card(player->comm_if->cd,&j);
             }
             else // played from face-down -> could not know result
             {
@@ -297,7 +299,7 @@ void game_loop(game_t *game)
 
         if(!player_plays_from(player))
         {
-            player->comm_if->write("Congrats, you won!");
+            player->comm_if->write(player->comm_if->cd,"Congrats, you won!");
         }
 
         cannot_play: 
