@@ -12,8 +12,18 @@
 #include <sys/types.h>
 #include <pthread.h>
 
+#include <signal.h>
+
+void sigsegv_handler(int signum)
+{
+    //close connections etc.
+    // restart? xdddd
+    // -> NEVER DIE ON SEGFAULT
+    exit(0);
+}
+
 player_t *mm_players[MAX_PLAYERS*12] = {0};
-game_t *lobbies[12] = {0};
+game_t *lobbies[12] = {0}; // maybe set of all games, not just lobbies?
 int serv_fd;
 
 
@@ -142,7 +152,7 @@ void start_serv()
 void serv_accept()
 {
     struct sockaddr_in cli;
-    int len = sizeof(cli);
+    unsigned len = sizeof(cli);
     int connfd = accept(serv_fd, (struct sockaddr*)&cli, &len);
     if (connfd < 0) {
         printf("server accept failed...\n");
@@ -156,6 +166,7 @@ void serv_accept()
 
 int main()
 {
+    signal(SIGSEGV, sigsegv_handler);
 
     start_serv();
     for(;;) serv_accept();
