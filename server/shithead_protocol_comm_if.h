@@ -1,5 +1,5 @@
-#include "card.h"
-#include "game.h"
+#include "include/card.h"
+#include "include/game.h"
 #include <sys/socket.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -43,7 +43,7 @@ void shit_write(int cd, char *str)
 void shit_tell_top(int cd, card_t c)
 {
     write(cd, "TOP CARD", strlen("TOP CARD"));
-    write(cd, c, sizeof(c));
+    write(cd, &c, sizeof(c));
 }
 
 void shit_tell_cards(int cd, int *h, card_t *f, char d_mask)
@@ -73,7 +73,7 @@ void shit_tell_lobbies(int cd, void *lobbies, int n)
     {
         if(!(lobbies+i)) continue; // ??
         write(cd, "LOBBY", strlen("LOBBY"));
-        write(cd, globs[i].id, sizeof(int));
+        write(cd, &globs[i].id, sizeof(int));
         //write player count out of max
     }
 }

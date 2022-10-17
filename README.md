@@ -1,5 +1,40 @@
 # KIV-UPS SHITHEAD 
 
+## communication
+two way: both server and client can request stuff (eg. server: card, client: lobbies)
+approaches:
+  - two threads: request initiator, request commitor
+    - initiator sends request and waits for reply
+    - commitor waits for request and sends reply
+  - two threads: reader, writer
+    - writer sends requests and replies in conforming formats
+    - reader reads requests and replies
+
+In game, server can send stuff without initial request (eg. tell top card)
+
+format of communication (i = initiator, c = commitor):
+  1. request (i)
+  2. N/ACK (c)
+  3. reply (c)
+  4. N/ACK (i)
+
+format of messages - both requests and replies:
+  1. COMMAND (capital chars, can contain spaces)
+  2. data (ideally, each COMMAND has its data len)
+  3. newline char (0x0A)
+
+messages: 
+ - server:
+   - requests:
+     - 
+   - replies:
+    - 
+ - client:
+   - requests:
+     - 
+   - replies:
+    - 
+
 
 
 ## Getting started

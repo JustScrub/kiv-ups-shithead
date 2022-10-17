@@ -1,0 +1,17 @@
+\subsection{Komunikace}
+
+Komunikace serveru a klienta je realizována protokolem založeným na zprávách typu požadavek (request) a odpověď (response). Na komunikační úrovni jsou si oba rovni: jak klient, tak server mohou zasílat požadavky, na něž čekají odpověď. Káždá zpráva musí být potvrzena příjemcem vysláním signálu \verb=ACK=. Nepřijetí signálu značí selhání komunikace. Jedna úspěšná komunikační "transakce" se řídí následujícími kroky:
+\begin{enumerate}
+    \item požadavek (\verb=i=)
+    \item \verb=ACK= (\verb=c=)
+    \item odpověď (\verb=c=)
+    \item \verb=ACK= (\verb=i=)
+\end{enumerate}
+kde \verb=i= značí iniciátora požadavku a \verb=c= pachatele odpovědi (commitor). Každá zpráva (požadavek i odpověď) má následující formát:
+\begin{enumerate}
+    \item indikátor (jedinečný řetězec kapitálek, může obsahovat mezery)
+    \item data
+    \item znak nového řádku (ACII 0x0A)
+\end{enumerate}
+
+Vzhledem k nátuře herního cyklu je ovšem potřeba, aby server poslal data klientovi i bez požadavku, např. oznámení o zahájení kola daného klienta - klient se nedotazuje, zda je na řadě, ale čeká na zprávu od serveru. Tento typ komunikace neodpovídá výše popsanému protokolu. Jelikož je ale realita pomíjivá a můžeme ji popisovat jen pomocí modelů konstruovaných naším chápáním, je možné ohnout její podstatu a říci, že veškeré zprávy typu "oznámení" jsou pouze požadavky s daty. Odpovědí na tento typ požadavku je pak zpráva \verb=THANKS=.
