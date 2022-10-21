@@ -10,6 +10,7 @@ void player_create(player_t *out)
     memset(out->face_down, INVALID_CARD, 3*sizeof(card_t));
     out->game_id = -1;
     out->state = PL_MAIN_MENU;
+    out->conn_state = PL_CONN_UP;
 }
 
 

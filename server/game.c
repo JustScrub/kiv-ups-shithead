@@ -35,6 +35,19 @@ bool game_add_player(game_t *game,player_t *pl)
     return false;
 }
 
+int game_player_count(game_t *game)
+{
+    int cnt = 0;
+    for(int i; i<MAX_PLAYERS;i++)
+    {
+        if(game->players[i] && game->players[i]->conn_state)
+        {
+            cnt++;
+        }
+    }
+    return cnt;
+}
+
 void game_delete(game_t *game)
 {
     free(game->draw_deck);
@@ -98,7 +111,6 @@ void game_init(game_t *game)
     }
 
     game->active_8 = false;
-    game->state = GM_PREPARE;
 }
 
 card_t game_get_top_card(game_t *game)

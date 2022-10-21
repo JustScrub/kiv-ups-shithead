@@ -1,9 +1,11 @@
 CC=gcc
+OUT=main
 
-all: main
+all: $(OUT)
 
 main: 
-	$(CC) -o main -pthread *.c -pedantic
+	$(CC) -o $(OUT) -pthread *.c -pedantic
+	chmod 711 $(OUT)
 
 clean: 
-	rm main
+	rm $(OUT)

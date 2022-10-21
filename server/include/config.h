@@ -21,5 +21,6 @@
  */
 #define MAX_PLAYERS 4
 
+#define MAX_GAMES 12
 
 #endif

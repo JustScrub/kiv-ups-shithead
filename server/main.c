@@ -11,8 +11,22 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <pthread.h>
+#include <unistd.h>
 
 #include <signal.h>
+
+/***********************************
+TODO:
+modify communication IF
+    - handle request function (+ "set" of accaptable requests at moment, NULL for all)
+    - create enum of requests
+
+each game must have request handler thread
+    - handle requests that can come from players at any time
+    - GAME STATE, TOP CARD, PING, QUIT
+
+after timeout, ping client
+************************************/
 
 void sigsegv_handler(int signum)
 {
@@ -22,8 +36,10 @@ void sigsegv_handler(int signum)
     exit(0);
 }
 
-player_t *mm_players[MAX_PLAYERS*12] = {0};
-game_t *lobbies[12] = {0}; // maybe set of all games, not just lobbies?
+player_t *players[MAX_PLAYERS*MAX_GAMES] = {0};
+game_t *games[MAX_GAMES] = {0};
+pthread_mutex_t pl_mutex = PTHREAD_MUTEX_INITIALIZER , gm_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 int serv_fd;
 
 
@@ -60,53 +76,102 @@ void std_test()
     game_loop(game);
 }
 
-// game * must be valid! (store in array)
-void *lobby_game(void *arg)
+void *game_thread(void *arg)
 {
     game_t *game = (game_t *)arg;
+    if(!game)
+    {
+        //log error
+        pthread_exit(NULL);
+    }
+    for(;;)
+    {
+        while(game_player_count(game) <2)
+        {
+            sleep(1);
+        }
 
-    // while game->pl_cnt < 2: waiting for more players
+        while(!(game->players[0]->comm_if->lobby_start(game->players[0]->comm_if->cd))) ;
 
-    while(!(game->players[0]->comm_if->lobby_start(game->players[0]->comm_if->cd))) ;
-
-    // still players must be > 1!
+        if(game_player_count(game) >=2) break;
+    }
+    game->state = GM_PREPARE;
     game_init(game);
     game_loop(game);
 }
 
+int get_lobby_games(game_t **lobbies)
+{
+    pthread_mutex_lock(&gm_mutex);
+
+    int cnt = 0;
+    for(int i=0; i<MAX_GAMES; i++)
+    {
+        if(games[i] && games[i]->state==GM_LOBBY) cnt++;
+    }
+
+    lobbies = calloc(cnt,sizeof(game_t *));
+    cnt=0;
+
+    for(int i=0; i<MAX_GAMES; i++)
+    {
+        if(games[i] && games[i]->state==GM_LOBBY) lobbies[cnt++] = games[i];
+    }
+
+    pthread_mutex_unlock(&gm_mutex);
+
+    return cnt;
+}
+
 // TODO: make code better
 // mm_players / lobbies full?
-// lobby full?
-// switch player context?
-void *mm_player(void *arg)
+void *mm_player_thread(void *arg)
 {
-    player_t pl = {0}; int i; unsigned choice;
-    player_create(&pl);
-    pl.comm_if = NULL;
-    pl.comm_if->cd = (int)arg;
+    player_t *pl = calloc(1, sizeof(player_t)); 
+    int i; unsigned choice;
+    game_t **lobbies = NULL;
 
-    for(i=0;mm_players[i];i++);
-    mm_players[i] = &pl;
+    player_create(&pl);
+    pl->comm_if = NULL;
+    pl->comm_if->cd = (int)arg;
+
+    pthread_mutex_lock(&pl_mutex);
+    for(i=0;players[i];i++);
+    players[i] = pl;
+    pthread_mutex_unlock(&pl_mutex);
 
     mm_win:
-    pl.comm_if->tell_lobbies((int)arg, lobbies, 12);
-    choice = pl.comm_if->mm_choice((int)arg);
+    choice = get_lobby_games(lobbies);
+    pl->comm_if->tell_lobbies((int)arg, lobbies, choice);
+    choice = pl->comm_if->mm_choice((int)arg); // blocks
 
+    pthread_mutex_lock(&gm_mutex);
     if(choice)
     {
         choice--;
-        //if(lobbies[choice]->) check if not game full
+        // check the game is still in lobby mode - might have changed where gm_mutex was unlocked
+        if(lobbies[choice]->state != GM_LOBBY || game_player_count(lobbies[choice]) == MAX_PLAYERS)
+        {
+            pl->comm_if->write(pl->comm_if->cd, "Sorry, game started or lobby full. Choose again.");
+
+            free(lobbies);
+            pthread_mutex_unlock(&gm_mutex);
+            goto mm_win;
+        }
 
         game_add_player(lobbies[choice],&pl);
-        mm_players[i] = NULL;
+
+        free(lobbies);
+        pthread_mutex_unlock(&gm_mutex);
         pthread_exit(NULL);
     }
 
-    for(choice=0;lobbies[choice];choice++) ;
-    game_create(&pl, lobbies[choice]);
-    mm_players[i] = NULL;
-    pthread_create(NULL,NULL,lobby_game,lobbies+choice);
+    for(choice=0;games[choice];choice++) ;
+    game_create(&pl, games[choice]);
+    pthread_create(NULL,NULL,game_thread,lobbies[choice]);
 
+    free(lobbies);
+    pthread_mutex_unlock(&gm_mutex);
     pthread_exit(NULL);
 }
 
@@ -161,7 +226,7 @@ void serv_accept()
     else
         printf("server accept the client...\n");
 
-    pthread_create(NULL, NULL, mm_player, (void *)connfd);
+    pthread_create(NULL, NULL, mm_player_thread, (void *)connfd);
 }
 
 int main()

@@ -31,6 +31,15 @@ typedef struct
 
 void game_create(player_t *owner, game_t *out);
 bool game_add_player(game_t *game,player_t *pl);
+/**
+ * @brief Count of connected players
+ * 
+ * does not count disconnected players
+ * 
+ * @param game 
+ * @return int 
+ */
+int game_player_count(game_t *game);
 void game_delete(game_t *game);
 void game_init(game_t *game);
 void game_loop(game_t *game);

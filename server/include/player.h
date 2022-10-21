@@ -20,6 +20,11 @@ typedef enum {
     PL_DONE            /**< Player won the game.*/
 } player_state_t;
 
+typedef enum {
+    PL_CONN_DOWN = 0,
+    PL_CONN_UP
+} player_conn_state_t;
+
 /**
  * @brief Communication interface with the player
  * 
@@ -51,6 +56,7 @@ typedef struct {
     int id;
     int game_id;
     player_state_t state;
+    player_conn_state_t conn_state;
     int hand[13];          /**< number of cards of value i on index i */
     card_t face_up[3];
     card_t face_down[3];
