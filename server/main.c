@@ -18,12 +18,13 @@
 /***********************************
 TODO:
 modify communication IF
-    - handle request function (+ "set" of accaptable requests at moment, NULL for all)
-    - create enum of requests
+    - 2 functions: 
+        - initiate request (which to send) - sends rq and handles reply
+        - handle request (which to handle) - reads specific request and replies. Must also check legal request (bit field?)
+    - create matrix of [PL_STATE][REQUEST] = LEGAL/ILLEGAL in player.c
 
-each game must have request handler thread
-    - handle requests that can come from players at any time
-    - GAME STATE, TOP CARD, PING, QUIT
+It is deterministic, when each request arrives (there's no request that can appear out of thin air)
+    - even QUIT, it is read on player's turn
 
 after timeout, ping client
 ************************************/

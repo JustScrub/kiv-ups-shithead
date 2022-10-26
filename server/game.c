@@ -18,6 +18,7 @@ void game_create(player_t *owner, game_t *out)
     out->players = calloc(MAX_PLAYERS,sizeof(player_t *));
     out->players[0] = owner;
     owner->game_id = out->id;
+    owner->state = PL_LOBBY_OWNER;
 }
 
 bool game_add_player(game_t *game,player_t *pl)
@@ -65,6 +66,13 @@ void game_delete(game_t *game)
 
 void game_init(game_t *game)
 {
+    for (int p=0;p<MAX_PLAYERS; p++)
+    {
+        game->players[p] && (game->players[p]->state=PL_PLAYING_WAITING);
+        // set "playing" status to all the players
+        // lazy eval -> if the addr is NULL, skips the assignment
+    }
+
     // fill cards + shuffle
     for(int i=0; i < DECK_NUM*52 ;i++)
     {
@@ -102,13 +110,6 @@ void game_init(game_t *game)
                 player_draw_cards(game->players[p],3,game->draw_deck);
             }
         }
-
-    for (int p=0;p<MAX_PLAYERS; p++)
-    {
-        game->players[p] && (game->players[p]->state=PL_PLAYING);
-        // set "playing" status to all the players
-        // lazy eval -> if the addr is NULL, skips the assignment
-    }
 
     game->active_8 = false;
 }
@@ -238,6 +239,7 @@ void game_loop(game_t *game)
         }
 
         player = game->players[curr_player];
+        player->state = PL_PLAYING_ON_TURN;
 
         // show top card
         player->comm_if->tell_top(player->comm_if->cd, game_get_top_card(game));
@@ -315,7 +317,7 @@ void game_loop(game_t *game)
         }
 
         cannot_play: 
-        ;
+        player->state = PL_PLAYING_WAITING;
     }
 }
 

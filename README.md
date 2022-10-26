@@ -49,6 +49,7 @@ messages:
      - MM CHOICE - request the server to process main menu choice
         - data: lobby ID (join) or 0 (create new)
      - LOBBY - request list of current lobbies
+     - RECON - inform the server about reconnectiong client, data: cached data for the server to validate
      - GAME STATE - game state to cache - player's cards, top card, other players' face up cards, draw deck size
      - GAME START - request the server to start the in-lobby game (cli must be lobby owner)
      - TOP CARD - request the top card
@@ -61,6 +62,21 @@ messages:
      - TOP CARD -> THANKS, data: none
      - WRITE -> THANKS, data: none
      - PING -> THANKS
+     - anything -> QUIT
 
 
-
+client request permissions:
+  - all states:
+    - PING, can answer with "QUIT"
+  - MAIN MENU:
+    - RECON, LOBBY, MM CHOICE, QUIT
+  - LOBBY:
+    - nothing special
+  - LOBBY_OWNER:
+    - GAME START
+  - PLAYING_WAITING:
+    - GAME STATE, TOP CARD
+  - PLAYING_ON_TURN:
+    - GAME STATE, TOP CARD
+  - DONE:
+    - nothing special
