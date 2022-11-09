@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <time.h>
 
 #include <signal.h>
 
@@ -37,54 +38,27 @@ void sigsegv_handler(int signum)
     exit(0);
 }
 
+struct timeval timeout = {
+    .tv_sec=10
+};
+
 player_t *players[MAX_PLAYERS*MAX_GAMES] = {0};
 game_t *games[MAX_GAMES] = {0};
 pthread_mutex_t pl_mutex = PTHREAD_MUTEX_INITIALIZER , gm_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int serv_fd;
 
-
-void std_test()
-{
-    player_t players[3];
-    player_comm_if_t std_cif = 
-    {
-        .read_card = std_read_card,
-        .rq_card = std_rq_card,
-        .rq_trade = std_rq_trade,
-        .read_trade = std_read_trade,
-        .write = std_write,
-        .tell_top = std_tell_top,
-        .tell_cards = std_tell_cards
-    };
-
-    for(int i =0;i<3;i++)
-    {
-        player_create(players+i);
-        players[i].comm_if = &std_cif;
-    }
-
-    game_t *game;
-    game_create(&players[0],game);
-    game_add_player(game, players+1);
-    //game_add_player(game, players+2);
-
-    game_init(game);
-
-    game->draw_deck->head = 0;
-    memset(game->players[1]->hand,0,13*sizeof(int));
-
-    game_loop(game);
-}
-
 void *game_thread(void *arg)
 {
+    pthread_detach(pthread_self());
     game_t *game = (game_t *)arg;
+    char *s = malloc(1); *s=0;
     if(!game)
     {
         //log error
         pthread_exit(NULL);
     }
+    game->state = GM_LOBBY;
     for(;;)
     {
         while(game_player_count(game) <2)
@@ -92,10 +66,13 @@ void *game_thread(void *arg)
             sleep(1);
         }
 
-        while(!(game->players[0]->comm_if->lobby_start(game->players[0]->comm_if->cd))) ;
+        // wait for owner to start the game
+        //while(!(game->players[0]->comm_if->lobby_start(game->players[0]->comm_if->cd))) ;
+        for(;!*s;game->players[0]->comm_if->handle_request(game->players[0]->comm_if->cd, allowed_reqs(PL_LOBBY_OWNER),s));
 
         if(game_player_count(game) >=2) break;
     }
+    free(s);
     game->state = GM_PREPARE;
     game_init(game);
     game_loop(game);
@@ -128,6 +105,7 @@ int get_lobby_games(game_t **lobbies)
 // mm_players / lobbies full?
 void *mm_player_thread(void *arg)
 {
+    pthread_detach(pthread_self());
     player_t *pl = calloc(1, sizeof(player_t)); 
     int i; unsigned choice;
     game_t **lobbies = NULL;
@@ -141,10 +119,14 @@ void *mm_player_thread(void *arg)
     players[i] = pl;
     pthread_mutex_unlock(&pl_mutex);
 
+    pl->comm_if->send_request(pl->comm_if->cd, SRRQ_MAIN_MENU, NULL);
     mm_win:
     choice = get_lobby_games(lobbies);
-    pl->comm_if->tell_lobbies((int)arg, lobbies, choice);
-    choice = pl->comm_if->mm_choice((int)arg); // blocks
+    /*pl->comm_if->tell_lobbies((int)arg, lobbies, choice);
+    choice = pl->comm_if->mm_choice((int)arg); // blocks*/
+    pl->comm_if->handle_request(pl->comm_if->cd, allowed_reqs(PL_MAIN_MENU),&choice);
+    if(choice<0) goto mm_win;
+
 
     pthread_mutex_lock(&gm_mutex);
     if(choice)
@@ -153,7 +135,9 @@ void *mm_player_thread(void *arg)
         // check the game is still in lobby mode - might have changed where gm_mutex was unlocked
         if(lobbies[choice]->state != GM_LOBBY || game_player_count(lobbies[choice]) == MAX_PLAYERS)
         {
-            pl->comm_if->write(pl->comm_if->cd, "Sorry, game started or lobby full. Choose again.");
+            //pl->comm_if->write(pl->comm_if->cd, "Sorry, game started or lobby full. Choose again.");
+            pl->comm_if->send_request(pl->comm_if->cd, SRRQ_WRITE, "Sorry, game started or lobby full. Choose again.");
+
 
             free(lobbies);
             pthread_mutex_unlock(&gm_mutex);
@@ -227,13 +211,15 @@ void serv_accept()
     else
         printf("server accept the client...\n");
 
+    setsockopt(connfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    setsockopt(connfd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
     pthread_create(NULL, NULL, mm_player_thread, (void *)connfd);
 }
 
 int main()
 {
     signal(SIGSEGV, sigsegv_handler);
-
+    games_init();
     start_serv();
     for(;;) serv_accept();
 

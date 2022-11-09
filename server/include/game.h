@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include "card.h"
+#include "comm_if.h"
 #include "player.h"
 #include "config.h"
 
@@ -17,8 +18,7 @@ typedef enum {
     GM_FINISHED        /**< Game is finished. Will be deleted soon. */
 } game_state_t;
 
-typedef struct
-{
+typedef struct {
     int id;
     game_state_t state;
     card_stack_t *draw_deck;
@@ -26,8 +26,10 @@ typedef struct
     player_t **players;
 
     bool active_8;
-}game_t;
+} game_t;
 
+void games_init();
+short allowed_reqs(player_state_t state);
 
 void game_create(player_t *owner, game_t *out);
 bool game_add_player(game_t *game,player_t *pl);

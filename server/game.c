@@ -1,13 +1,30 @@
 #include "include/game.h"
 #include "include/card.h"
 #include "include/player.h"
+#include "include/comm_if.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <stddef.h>
 #include <stdbool.h>
 
-
 static int gm_id = 0;
+
+short allowed_requests_matrix[6];
+
+void games_init()
+{
+    allowed_requests_matrix[PL_MAIN_MENU] = PLRQ_DEFAULT|PLRQ_RECON|PLRQ_LOBBY|PLRQ_MM_CHOICE;
+    allowed_requests_matrix[PL_LOBBY] = PLRQ_DEFAULT;
+    allowed_requests_matrix[PL_LOBBY_OWNER] = PLRQ_DEFAULT|PLRQ_GAME_START;
+    allowed_requests_matrix[PL_PLAYING_WAITING] = PLRQ_DEFAULT|PLRQ_GAME_STATE|PLRQ_TOP_CARD;
+    allowed_requests_matrix[PL_PLAYING_ON_TURN] = PLRQ_DEFAULT|PLRQ_GAME_STATE|PLRQ_TOP_CARD;
+    allowed_requests_matrix[PL_DONE] = PLRQ_DEFAULT;
+}
+
+short allowed_reqs(player_state_t state)
+{
+    return allowed_requests_matrix[state];
+}
 
 void game_create(player_t *owner, game_t *out)
 {
@@ -41,7 +58,7 @@ int game_player_count(game_t *game)
     int cnt = 0;
     for(int i; i<MAX_PLAYERS;i++)
     {
-        if(game->players[i] && game->players[i]->conn_state)
+        if(game->players[i] && game->players[i]->comm_if->conn_state)
         {
             cnt++;
         }
@@ -210,7 +227,7 @@ void game_loop(game_t *game)
 {
     int curr_player = 0, j, reason;
     card_t card = INVALID_CARD;
-    player_t *player;
+    player_t *player; int cd;
 
     // Players trading
     for(curr_player = 0; curr_player < MAX_PLAYERS; curr_player++)
@@ -234,26 +251,31 @@ void game_loop(game_t *game)
         if(!game->players[curr_player]) continue;
         if(game->players[curr_player]->state == PL_DONE) 
         {
-            game->players[curr_player] = NULL;
+            //game->players[curr_player] = NULL;
             continue;
         }
 
         player = game->players[curr_player];
+        cd = player->comm_if->cd;
         player->state = PL_PLAYING_ON_TURN;
 
         // show top card
-        player->comm_if->tell_top(player->comm_if->cd, game_get_top_card(game));
+        /*player->comm_if->tell_top(player->comm_if->cd, game_get_top_card(game));
         player->comm_if->tell_cards(
             player->comm_if->cd,
             player->hand, 
             player->face_up,
             player_secret_face_down(player)
-            );
+            );*/
+
+        player->comm_if->send_request(cd,SRRQ_TOP_CARD, (void *)game_get_top_card(game));
+        player->comm_if->send_request(cd,SRRQ_YOUR_CARDS, player);
 
         // check if player cannot play
         if((reason=game_check_cannot_play(game, player)))
         {
-            player->comm_if->write(player->comm_if->cd,"You cannot play at the moment.");
+            //player->comm_if->write(player->comm_if->cd,"You cannot play at the moment.");
+            player->comm_if->send_request(cd, SRRQ_WRITE, "You cannot play at the moment.");
             if(reason==1) game->active_8 = false;
             else{
                 player_draw_cards( player, card_stack_height(game->play_deck), game->play_deck);
@@ -263,16 +285,20 @@ void game_loop(game_t *game)
 
         // wait till player plays valid card
         legal_check: 
-        player->comm_if->rq_card(player->comm_if->cd);
-        card = player->comm_if->read_card(player->comm_if->cd,&j);
+        /*player->comm_if->rq_card(player->comm_if->cd);
+        card = player->comm_if->read_card(player->comm_if->cd,&j);*/
+        player->comm_if->send_request(cd, SRRQ_GIMME_CARD, &j);
+
         if(player_plays_from(player) == PL_PILE_F_DWN) card = player->face_down[card];
         while((reason=game_check_illegal(game, player, card,j)))
         {
             if(reason==1) // player chose bad card
             {
-                player->comm_if->write(player->comm_if->cd,"Illegal card(s). Choose again.");
-                player->comm_if->rq_card(player->comm_if->cd);
-                card = player->comm_if->read_card(player->comm_if->cd,&j);
+                //player->comm_if->write(player->comm_if->cd,"Illegal card(s). Choose again.");
+                player->comm_if->send_request(cd, SRRQ_WRITE, "Illegal card(s). Choose again.");
+                /*player->comm_if->rq_card(player->comm_if->cd);
+                card = player->comm_if->read_card(player->comm_if->cd,&j);*/
+                player->comm_if->send_request(cd, SRRQ_GIMME_CARD, &j);
             }
             else // played from face-down -> could not know result
             {
@@ -313,7 +339,8 @@ void game_loop(game_t *game)
 
         if(!player_plays_from(player))
         {
-            player->comm_if->write(player->comm_if->cd,"Congrats, you won!");
+            //player->comm_if->write(player->comm_if->cd,"Congrats, you won!");
+            player->comm_if->send_request(cd, SRRQ_WRITE, "Congrats, you won!");
         }
 
         cannot_play: 

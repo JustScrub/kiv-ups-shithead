@@ -30,6 +30,8 @@ messages:
      - GIMME CARD - request the player to play a card
      - TRADE NOW - request the player to trade cards before game starts and tell the result
      - YOUR TURN - tell the player he's on turn
+     - ON TURN - tell the players who's on turn
+        - data: player id
      - TOP CARD - tell the player the top card (after YOUR TURN request)
         - data: the card (1 byte)
      - YOUR CARDS - tell the player his cards
@@ -42,6 +44,7 @@ messages:
     - LOBBY -> LOBBIES, data: "LOBBYi" for all created lobbies i
     - GAME STATE -> GAME STATE, data: "YOUR CARDS""HAND"card","amount";" for all cards (13)"FACE UP"3 cards"FACE DOWN"mask"TOP CARD"card"FACE UPS"("FU"cards for all other players, starting with next)"DRAW SIZE"byte
     - TOP CARD -> TOP CARD, data: card
+    - RECON -> INVALID|LOBBY|TRADE|RUNNING|FINISHED
     - PING -> THANKS
 
  - client:
@@ -67,7 +70,7 @@ messages:
 
 client request permissions:
   - all states:
-    - PING, can answer with "QUIT"
+    - PING, QUIT, can answer with "QUIT"
   - MAIN MENU:
     - RECON, LOBBY, MM CHOICE, QUIT
   - LOBBY:
