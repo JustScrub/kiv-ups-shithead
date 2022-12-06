@@ -52,7 +52,6 @@ comm_flag_t shit_req_handle(int cd,short rq_bfield, void *data)
 
     flag =  cli_rqs_handlers[i](cd,rest, data);
     if(flag == COMM_OK) return COMM_OK;
-
 }
 
 

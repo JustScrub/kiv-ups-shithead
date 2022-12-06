@@ -17,7 +17,7 @@ typedef enum {
     PLRQ_QUIT       = 1<<7
 } player_request_t;
 
-#define PLRQ_DEFAULT PLRQ_PING
+#define PLRQ_DEFAULT PLRQ_PING|PLRQ_QUIT
 
 typedef enum {
     SRRQ_MAIN_MENU=0,

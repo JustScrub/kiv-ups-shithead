@@ -14,6 +14,14 @@ typedef comm_flag_t (*proto_fn)(int cd,char *rest, void *data);
 
 comm_flag_t shit_req_send(int cd,server_request_t request, void *data);
 
+/**
+ * @brief Handle request
+ * 
+ * @param cd connection descriptor
+ * @param rq_bfield bit field of ORed \c player_request_t
+ * @param data data of the request
+ * @return comm_flag_t 
+ */
 comm_flag_t shit_req_handle(int cd,short rq_bfield, void *data);
 
 comm_flag_t send_main_menu(int cd, char *rest, void *data);
