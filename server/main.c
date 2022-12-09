@@ -121,11 +121,11 @@ void *mm_player_thread(void *arg)
 
     pl->comm_if->send_request(pl->comm_if->cd, SRRQ_MAIN_MENU, NULL);
     mm_win:
-    choice = get_lobby_games(lobbies);
+    i = get_lobby_games(lobbies);
     /*pl->comm_if->tell_lobbies((int)arg, lobbies, choice);
     choice = pl->comm_if->mm_choice((int)arg); // blocks*/
     pl->comm_if->handle_request(pl->comm_if->cd, allowed_reqs(PL_MAIN_MENU),&choice);
-    if(choice<0) goto mm_win;
+    if(choice<0 || choice>i) goto mm_win;
 
 
     pthread_mutex_lock(&gm_mutex);

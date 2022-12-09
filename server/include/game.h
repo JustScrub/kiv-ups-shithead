@@ -24,6 +24,7 @@ typedef struct {
     card_stack_t *draw_deck;
     card_stack_t *play_deck;
     player_t **players;
+    int on_turn;
 
     bool active_8;
 } game_t;

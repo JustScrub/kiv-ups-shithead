@@ -195,10 +195,6 @@ bool game_check_burn_pile(game_t *game)
 
 int game_check_illegal(game_t *game, player_t *player, card_t card, int cnt)
 {
-    // best choice here is decision tree.
-    // Well, I'm lazy for that.
-    // Best I can do is if-else (-:
-
     int reason = (player_plays_from(player) == PL_PILE_F_DWN)+1;
     int top = game_get_top_card(game);
     if(game->active_8)

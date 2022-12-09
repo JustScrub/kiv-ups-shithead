@@ -1,6 +1,9 @@
 #ifndef __SHITHEAD_COMM_IF_H__
 #define __SHITHEAD_COMM_IF_H__
 
+#include "include/game.h"
+#include "include/player.h"
+
 typedef enum {
     PL_CONN_DOWN = 0,
     PL_CONN_UP
@@ -50,9 +53,7 @@ typedef struct {
     player_conn_state_t conn_state;     /**< conncection state of the player */
     comm_flag_t (*send_request)(int cd,server_request_t request, void *data); /**< Send a request to the client with some data and recieve the data*/
     comm_flag_t (*handle_request)(int cd,short rq_bfield, void *data);  /**< Reply to a client request with data. 
-                                                                      Client request must be from the rq_bfield.
-                                                                      "PLRQ_PING" must always be accepted.*/
-
+                                                                      Client request must be from the rq_bfield.*/
 } player_comm_if_t;
 
 #endif
