@@ -2,29 +2,13 @@
 #include "include/card.h"
 #include "include/player.h"
 #include "include/comm_if.h"
+#include "include/player_quitter.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <stddef.h>
 #include <stdbool.h>
 
 static int gm_id = 0;
-
-short allowed_requests_matrix[6];
-
-void games_init()
-{
-    allowed_requests_matrix[PL_MAIN_MENU] = PLRQ_DEFAULT|PLRQ_RECON|PLRQ_LOBBY|PLRQ_MM_CHOICE;
-    allowed_requests_matrix[PL_LOBBY] = PLRQ_DEFAULT;
-    allowed_requests_matrix[PL_LOBBY_OWNER] = PLRQ_DEFAULT|PLRQ_GAME_START;
-    allowed_requests_matrix[PL_PLAYING_WAITING] = PLRQ_DEFAULT|PLRQ_GAME_STATE|PLRQ_TOP_CARD;
-    allowed_requests_matrix[PL_PLAYING_ON_TURN] = PLRQ_DEFAULT|PLRQ_GAME_STATE|PLRQ_TOP_CARD;
-    allowed_requests_matrix[PL_DONE] = PLRQ_DEFAULT;
-}
-
-short allowed_reqs(player_state_t state)
-{
-    return allowed_requests_matrix[state];
-}
 
 void game_create(player_t *owner, game_t *out)
 {
@@ -131,6 +115,29 @@ void game_init(game_t *game)
     game->active_8 = false;
 }
 
+void player_trade_cards(game_t *game, int pl_idx)
+{
+    int j; card_t card;
+    comm_flag_t ret;
+    player_t *player = game->players[pl_idx];
+    ret = game_comm(game, pl_idx, SRRQ_TRADE_NOW, &j);
+    if(ret == COMM_QUIT || ret == COMM_DIS) return;
+    for(int i=0; i<3; i++)
+    {
+        card = ((card_t *)&j)[i];
+        if(!card_is_valid(card)) continue;
+        if(!player->hand[card-2])
+        {
+            player->comm_if->write(player->comm_if->cd,"You don't have that card");
+            break; //tries to cheat -> cannot trade
+        }
+        // switching
+        player->hand[player->face_up[i] -2]++;
+        player->hand[card-2]--;
+        player->face_up[i] = card;
+    }
+}
+
 card_t game_get_top_card(game_t *game)
 {
     int i;
@@ -219,24 +226,42 @@ int game_check_illegal(game_t *game, player_t *player, card_t card, int cnt)
         return player_has_card(player, card, cnt)? 0 : reason;
 }
 
+void game_send_all(game_t *game, server_request_t request, void *data)
+{
+    for(int i=0; i<MAX_PLAYERS; i++)
+    {
+        if(game->players[i])
+        {
+            game_comm(game, i, request, data);
+        }
+    }
+}
+
 void game_loop(game_t *game)
 {
     int curr_player = 0, j, reason;
     card_t card = INVALID_CARD;
-    player_t *player; int cd;
+    player_t *player;
+    comm_flag_t ret;
 
     // Players trading
     for(curr_player = 0; curr_player < MAX_PLAYERS; curr_player++)
     {
-        if(game->players[curr_player]) player_trade_cards(game->players[curr_player]);
+        if(!game->players[curr_player]) continue;
+        
+        game_comm(game, curr_player, SRRQ_GAME_STATE, game);
+        player_trade_cards(game,curr_player);
     }
 
     // first player: left-to-right, who has 3 in hand starts first. if no 3, then 4 etc...
     j=3;
-    for (curr_player = 0; curr_player < MAX_PLAYERS; j++, curr_player++)
+    for (curr_player = 0; j < A_VAL;)
     {
         if(!game->players[curr_player]) continue;
         if(player_has_card(game->players[curr_player],j,1)) break;
+
+        curr_player = (curr_player+1)%MAX_PLAYERS;
+        j += !curr_player;
     }
     
     // game start
@@ -247,31 +272,22 @@ void game_loop(game_t *game)
         if(!game->players[curr_player]) continue;
         if(game->players[curr_player]->state == PL_DONE) 
         {
-            //game->players[curr_player] = NULL;
+            //player won, but still spectating
             continue;
         }
 
         player = game->players[curr_player];
-        cd = player->comm_if->cd;
         player->state = PL_PLAYING_ON_TURN;
 
-        // show top card
-        /*player->comm_if->tell_top(player->comm_if->cd, game_get_top_card(game));
-        player->comm_if->tell_cards(
-            player->comm_if->cd,
-            player->hand, 
-            player->face_up,
-            player_secret_face_down(player)
-            );*/
-
-        player->comm_if->send_request(cd,SRRQ_TOP_CARD, (void *)game_get_top_card(game));
-        player->comm_if->send_request(cd,SRRQ_YOUR_CARDS, player);
+        game_send_all(game, SRRQ_GAME_STATE, game);
+        if(!game->players[curr_player]) continue;   // player might have disconnected
 
         // check if player cannot play
         if((reason=game_check_cannot_play(game, player)))
         {
-            //player->comm_if->write(player->comm_if->cd,"You cannot play at the moment.");
-            player->comm_if->send_request(cd, SRRQ_WRITE, "You cannot play at the moment.");
+            //player->comm_if->send_request(cd, SRRQ_WRITE, "You cannot play at the moment.");
+            game_comm(game, curr_player, SRRQ_WRITE, "You cannot play at the moment.");
+
             if(reason==1) game->active_8 = false;
             else{
                 player_draw_cards( player, card_stack_height(game->play_deck), game->play_deck);
@@ -281,20 +297,19 @@ void game_loop(game_t *game)
 
         // wait till player plays valid card
         legal_check: 
-        /*player->comm_if->rq_card(player->comm_if->cd);
-        card = player->comm_if->read_card(player->comm_if->cd,&j);*/
-        player->comm_if->send_request(cd, SRRQ_GIMME_CARD, &j);
+        //player->comm_if->send_request(cd, SRRQ_GIMME_CARD, &j);
+        game_comm(game, curr_player, SRRQ_GIMME_CARD, &j);
+        if(!game->players[curr_player]) continue;   // player might have disconnected
 
         if(player_plays_from(player) == PL_PILE_F_DWN) card = player->face_down[card];
         while((reason=game_check_illegal(game, player, card,j)))
         {
             if(reason==1) // player chose bad card
             {
-                //player->comm_if->write(player->comm_if->cd,"Illegal card(s). Choose again.");
-                player->comm_if->send_request(cd, SRRQ_WRITE, "Illegal card(s). Choose again.");
-                /*player->comm_if->rq_card(player->comm_if->cd);
-                card = player->comm_if->read_card(player->comm_if->cd,&j);*/
-                player->comm_if->send_request(cd, SRRQ_GIMME_CARD, &j);
+                //player->comm_if->send_request(cd, SRRQ_WRITE, "Illegal card(s). Choose again.");
+                game_comm(game, curr_player, SRRQ_WRITE, "Illegal card(s). Choose again.");
+
+                goto legal_check;
             }
             else // played from face-down -> could not know result
             {
@@ -335,13 +350,90 @@ void game_loop(game_t *game)
 
         if(!player_plays_from(player))
         {
-            //player->comm_if->write(player->comm_if->cd,"Congrats, you won!");
-            player->comm_if->send_request(cd, SRRQ_WRITE, "Congrats, you won!");
+            game_comm(game, curr_player, SRRQ_WRITE, "Congrats, you won!");
         }
 
         cannot_play: 
         player->state = PL_PLAYING_WAITING;
     }
+}
+
+
+comm_flag_t game_comm(game_t *game, int pl_idx, server_request_t request, void *data)
+{
+    comm_flag_t ret;
+    ret = game->players[pl_idx]->comm_if->send_request(game->players[pl_idx]->comm_if->cd, request, data);
+    /*
+    if(send)
+    else
+        ret = game->players[pl_idx]->comm_if->handle_request(game->players[pl_idx]->comm_if->cd, state, data);
+    */
+    if(ret == COMM_QUIT)
+    {
+        quitter_push(game->players[pl_idx]);
+        game->players[pl_idx] = NULL;
+    }
+
+    if(ret == COMM_DIS)
+    {
+        game->players[pl_idx]->comm_if.conn_state = COMM_DIS;
+        quitter_push(game->players[pl_idx]);
+        game->players[pl_idx] = NULL;
+    }
+
+    return ret;
+}
+
+void *game_thread(void *arg)
+{
+    pthread_detach(pthread_self());
+    game_t *game = (game_t *)arg;
+    char *s = malloc(1); *s=0;
+    comm_flag_t ret;
+    if(!game)
+    {
+        //log error
+        pthread_exit(NULL);
+    }
+    game->state = GM_LOBBY;
+    for(;;)
+    {
+        // tell owner the state of the lobby
+        ret = game_comm(game, 0, SRRQ_LOBBY_STATE, game);
+        if(ret == COMM_QUIT || ret == COMM_DIS) goto lobby_owner_quit;
+
+        // tell rest of the players the state of the lobby
+        for(int i=1; i<MAX_PLAYERS; i++)
+        {
+            if(!game->players[i]) continue;
+            ret = game_comm(game, i, SRRQ_LOBBY_STATE, game);
+        }
+
+        // wait for owner to start the game
+        game_comm(game, 0, SRRQ_LOBBY_START, s);
+        if(ret == COMM_QUIT || ret == COMM_DIS) goto lobby_owner_quit;
+
+        if(s && game_player_count(game) >= 2) break;
+    }
+
+    free(s);
+    game->state = GM_PREPARE;
+    game_init(game);
+    game_loop(game);
+
+    game_delete(game);
+    pthread_exit(NULL);
+
+    lobby_owner_quit:
+        for(int i=0; i<MAX_PLAYERS; i++)
+        {
+            if(!game->players[i]) continue;
+            game->players[i]->comm_if->send_request(game->players[i]->comm_if->cd, SRRQ_WRITE, "The lobby owner has quit.");
+            quitter_push(game->players[i]);
+        }
+        free(s);
+        game_delete(game);
+        pthread_exit(NULL);
 }
 
 

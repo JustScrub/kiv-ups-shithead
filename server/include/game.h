@@ -29,9 +29,6 @@ typedef struct {
     bool active_8;
 } game_t;
 
-void games_init();
-short allowed_reqs(player_state_t state);
-
 void game_create(player_t *owner, game_t *out);
 bool game_add_player(game_t *game,player_t *pl);
 /**
@@ -100,5 +97,22 @@ int game_check_cannot_play(game_t *game, player_t *player);
  * @return false 
  */
 bool game_check_burn_pile(game_t *game);
+
+/**
+ * @brief Communication with player in-game
+ * 
+ * Handles Quitting and Disconnecting
+ * 
+ * @param game the game
+ * @param pl_idx index of the player in the game
+ * @param request request to send
+ * @param data data to send or receive
+ * @return comm_flag_t
+ */
+comm_flag_t game_comm(game_t *game, int pl_idx, server_request_t request, void *data);
+
+void game_send_all(game_t *game, server_request_t request, void *data);
+
+void *game_thread(void *arg);
 
 #endif

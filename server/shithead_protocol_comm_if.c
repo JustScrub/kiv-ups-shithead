@@ -1,22 +1,40 @@
 #include "shithead_protocol_comm_if.h"
 
-char *cli_rqs_str[] =              {"MM CHOICE", "LOBBY", "GAME STATE", "TOP CARD", "RECON", "PING", "GAME START", "QUIT"};
-player_request_t cli_rqs_field[] = {PLRQ_MM_CHOICE, PLRQ_LOBBY, PLRQ_GAME_STATE, PLRQ_TOP_CARD, PLRQ_RECON, PLRQ_PING, PLRQ_GAME_START, PLRQ_QUIT};
-proto_fn cli_rqs_handlers[];
+//player_request_t cli_rqs_field[] = {PLRQ_MM_CHOICE, /*PLRQ_LOBBY,*/ PLRQ_GAME_STATE, /*PLRQ_TOP_CARD,*/ PLRQ_RECON, /*PLRQ_PING,*/ PLRQ_GAME_START, PLRQ_QUIT};
+//char *cli_rqs_str[] =              {"MM CHOICE", "LOBBY", "GAME STATE", "TOP CARD", "RECON", "PING", "GAME START", "QUIT"};
+//proto_fn cli_rqs_handlers[];
 
+#define RQ2STR(rq) [SRRQ_##rq] = #rq
 char *ser_rqs_str[] = {
-    [SRRQ_MAIN_MENU] = "MAIN MENU",
-    [SRRQ_GIMME_CARD] = "GIMME CARD",
-    [SRRQ_ON_TURN] = "ON TURN",
-    [SRRQ_YOUR_TURN] = "YOUR TURN",
-    [SRRQ_YOUR_CARDS] = "YOUR CARDS",
-    [SRRQ_TRADE_NOW] = "TRADE NOW",
-    [SRRQ_PING] = "PING",
-    [SRRQ_WRITE] = "WRITE",
-    [SRRQ_TOP_CARD] = "TOP CARD"
+    RQ2STR(MAIN_MENU),
+    RQ2STR(MM_CHOICE),
+    RQ2STR(RECON),
+    RQ2STR(LOBBIES),
+    RQ2STR(LOBBY_STATE),
+    RQ2STR(LOBBY_START),
+    RQ2STR(TRADE_NOW),
+    RQ2STR(ON_TURN),
+    RQ2STR(GIMME_CARD),
+    RQ2STR(GAME_STATE),
+    RQ2STR(WRITE),
 };
+#undef RQ2STR
 
-proto_fn bernie_sanders[];
+#define RQ2FN(rq) [SRRQ_##rq] = send_##rq
+proto_fn bernie_sanders[] = {
+    RQ2FN(MAIN_MENU),
+    RQ2FN(MM_CHOICE),
+    RQ2FN(RECON),
+    RQ2FN(LOBBIES),
+    RQ2FN(LOBBY_STATE),
+    RQ2FN(LOBBY_START),
+    RQ2FN(TRADE_NOW),
+    RQ2FN(ON_TURN),
+    RQ2FN(GIMME_CARD),
+    RQ2FN(GAME_STATE),
+    RQ2FN(WRITE),
+};
+#undef RQ2FN
 
 void consume_proto_part(char **rest, char *next)
 {
@@ -28,11 +46,22 @@ comm_flag_t shit_req_send(int cd,server_request_t request, void *data)
 {
     char bfr[256] = {0};
     comm_flag_t flag;
+    int TO_cnt = 0;
+    send:
     flag = bernie_sanders[request](cd,bfr, data);
-    if(flag == COMM_OK) return COMM_OK;
-    // other stuff - pinging, quitting etc
+
+    switch(flag)
+    {
+        case COMM_TO:
+        case COMM_BS:
+            if(TO_cnt++ > 3) return flag;
+            goto send;
+        default:
+            return flag;
+    }
 }
 
+/*
 comm_flag_t shit_req_handle(int cd,short rq_bfield, void *data)
 {
     char bfr[256] = {0}, *rest = bfr, next[64] = {0};
@@ -48,21 +77,12 @@ comm_flag_t shit_req_handle(int cd,short rq_bfield, void *data)
     if(!(rq_bfield&cli_rqs_field[i])) return COMM_ILL;
 
     if(rq_bfield&PLRQ_QUIT) ;//quit
-    if(rq_bfield&PLRQ_PING) ;//reply to ping
+    //if(rq_bfield&PLRQ_PING) ;//reply to ping
 
     flag =  cli_rqs_handlers[i](cd,rest, data);
     if(flag == COMM_OK) return COMM_OK;
 }
-
-
-
-
-
-
-
-
-
-
+*/
 
 
 

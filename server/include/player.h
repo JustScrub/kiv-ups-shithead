@@ -24,6 +24,7 @@ typedef enum {
 } player_state_t;
 
 typedef struct {
+    char *nick;
     int id;
     int game_id;
     player_state_t state;
@@ -31,7 +32,7 @@ typedef struct {
     card_t face_up[3];
     card_t face_down[3];
 
-    player_comm_if_t *comm_if;
+    player_comm_if_t comm_if;
 } player_t;
 
 void player_create(player_t *out);
@@ -46,7 +47,6 @@ int player_hand_card_cnt(player_t *player);
  * @return int 
  */
 bool player_has_card(player_t *player, card_t card, int cnt);
-void player_trade_cards(player_t *player);
 
 /**
  * @brief Gets, whether player should play from hand, face-up cards or face-down cards.

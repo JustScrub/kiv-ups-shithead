@@ -21,9 +21,25 @@ comm_flag_t shit_req_send(int cd,server_request_t request, void *data);
  * @param rq_bfield bit field of ORed \c player_request_t
  * @param data data of the request and reply
  * @return comm_flag_t 
+    comm_flag_t shit_req_handle(int cd,short rq_bfield, void *data);
  */
-comm_flag_t shit_req_handle(int cd,short rq_bfield, void *data);
 
+#define RQFN(x) comm_flag_t send_##x(int cd, char *rest, void *data)
+RQFN(MAIN_MENU);
+RQFN(MM_CHOICE);
+RQFN(RECON);
+RQFN(LOBBIES);
+RQFN(LOBBY_STATE);
+RQFN(LOBBY_START);
+RQFN(TRADE_NOW);
+RQFN(ON_TURN);
+RQFN(GIMME_CARD);
+RQFN(GAME_STATE);
+RQFN(WRITE);
+#undef RQFN
+
+
+/*
 comm_flag_t send_main_menu(int cd, char *rest, void *data);
 comm_flag_t send_lobbies(int cd, char *rest, void *data);
 comm_flag_t send_gimme_card(int cd, char *rest, void *data);
@@ -41,4 +57,4 @@ comm_flag_t recv_recon(int cd, char *rest, void *data);
 comm_flag_t recv_ping(int cd, char *rest, void *data);
 comm_flag_t recv_game_start(int cd, char *rest, void *data);
 comm_flag_t recv_quit(int cd, char *rest, void *data);
-
+*/

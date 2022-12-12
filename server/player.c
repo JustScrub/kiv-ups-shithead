@@ -104,27 +104,6 @@ bool player_draw_cards(player_t *player, int cnt, card_stack_t *draw_deck)
     return true;
 }
 
-void player_trade_cards(player_t *player)
-{
-    int j; card_t card;
-    player->comm_if->rq_trade(player->comm_if->cd);
-    player->comm_if->read_trade(player->comm_if->cd,&j);
-    for(int i=0; i<3; i++)
-    {
-        card = ((card_t *)&j)[i];
-        if(!card_is_valid(card)) continue;
-        if(!player->hand[card-2])
-        {
-            player->comm_if->write(player->comm_if->cd,"You don't have that card");
-            break; //tries to cheat -> cannot trade
-        }
-        // switching
-        player->hand[player->face_up[i] -2]++;
-        player->hand[card-2]--;
-        player->face_up[i] = card;
-    }
-}
-
 char player_secret_face_down(player_t *player)
 {
     return      (card_is_valid(player->face_down[2]))<<2 | 

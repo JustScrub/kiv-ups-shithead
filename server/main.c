@@ -1,8 +1,10 @@
 #include "include/game.h"
 #include "include/card.h"
 #include "include/player.h"
+#include "include/comm_if.h"
+#include "include/player_quitter.h"
 
-#include "std_io_comm_if.h"
+#include "shithead_protocol_comm_if.h"
 
 #include <netdb.h>
 #include <netinet/in.h>
@@ -15,20 +17,6 @@
 #include <time.h>
 
 #include <signal.h>
-
-/***********************************
-TODO:
-modify communication IF
-    - 2 functions: 
-        - initiate request (which to send) - sends rq and handles reply
-        - handle request (which to handle) - reads specific request and replies. Must also check legal request (bit field?)
-    - create matrix of [PL_STATE][REQUEST] = LEGAL/ILLEGAL in player.c
-
-It is deterministic, when each request arrives (there's no request that can appear out of thin air)
-    - even QUIT, it is read on player's turn
-
-after timeout, ping client
-************************************/
 
 void sigsegv_handler(int signum)
 {
@@ -47,36 +35,6 @@ game_t *games[MAX_GAMES] = {0};
 pthread_mutex_t pl_mutex = PTHREAD_MUTEX_INITIALIZER , gm_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int serv_fd;
-
-void *game_thread(void *arg)
-{
-    pthread_detach(pthread_self());
-    game_t *game = (game_t *)arg;
-    char *s = malloc(1); *s=0;
-    if(!game)
-    {
-        //log error
-        pthread_exit(NULL);
-    }
-    game->state = GM_LOBBY;
-    for(;;)
-    {
-        while(game_player_count(game) <2)
-        {
-            sleep(1);
-        }
-
-        // wait for owner to start the game
-        //while(!(game->players[0]->comm_if->lobby_start(game->players[0]->comm_if->cd))) ;
-        for(;!*s;game->players[0]->comm_if->handle_request(game->players[0]->comm_if->cd, allowed_reqs(PL_LOBBY_OWNER),s));
-
-        if(game_player_count(game) >=2) break;
-    }
-    free(s);
-    game->state = GM_PREPARE;
-    game_init(game);
-    game_loop(game);
-}
 
 int get_lobby_games(game_t **lobbies)
 {
@@ -101,30 +59,35 @@ int get_lobby_games(game_t **lobbies)
     return cnt;
 }
 
+
+player_comm_if_t shit_if = {
+    .send_request = shit_req_send,
+    .conn_state = PL_CONN_UP
+};
+
 // TODO: make code better
-// mm_players / lobbies full?
+// lobbies full?
 void *mm_player_thread(void *arg)
 {
     pthread_detach(pthread_self());
-    player_t *pl = calloc(1, sizeof(player_t)); 
     int i; unsigned choice;
     game_t **lobbies = NULL;
-
-    player_create(&pl);
-    pl->comm_if = NULL;
-    pl->comm_if->cd = (int)arg;
+    player_t *pl = (player_t *)arg;
 
     pthread_mutex_lock(&pl_mutex);
     for(i=0;players[i];i++);
     players[i] = pl;
     pthread_mutex_unlock(&pl_mutex);
 
-    pl->comm_if->send_request(pl->comm_if->cd, SRRQ_MAIN_MENU, NULL);
+    pl->comm_if.send_request(pl->comm_if.cd, SRRQ_MAIN_MENU, NULL);
+
     mm_win:
     i = get_lobby_games(lobbies);
     /*pl->comm_if->tell_lobbies((int)arg, lobbies, choice);
     choice = pl->comm_if->mm_choice((int)arg); // blocks*/
-    pl->comm_if->handle_request(pl->comm_if->cd, allowed_reqs(PL_MAIN_MENU),&choice);
+    pl->comm_if.send_request(pl->comm_if.cd, SRRQ_LOBBIES, lobbies);
+    pl->comm_if.handle_request(pl->comm_if.cd, allowed_reqs(PL_MAIN_MENU),&choice);
+    // Timeout -> choice = -1
     if(choice<0 || choice>i) goto mm_win;
 
 
@@ -158,6 +121,21 @@ void *mm_player_thread(void *arg)
     free(lobbies);
     pthread_mutex_unlock(&gm_mutex);
     pthread_exit(NULL);
+}
+
+void *player_quitter(void *arg) {
+    pthread_detach(pthread_self());
+    player_t *pl;
+    while(1) {
+        pl = quitter_pop();
+        if(pl) {
+            pl->game_id = -1;
+            pl->state = PL_MAIN_MENU;
+            if(pl->comm_if.conn_state == PL_CONN_UP)
+                pthread_create(NULL,NULL,mm_player_thread,pl);
+        }
+        sleep(1);
+    }
 }
 
 void start_serv()
@@ -213,13 +191,18 @@ void serv_accept()
 
     setsockopt(connfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     setsockopt(connfd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-    pthread_create(NULL, NULL, mm_player_thread, (void *)connfd);
+
+    player_t *pl = calloc(1, sizeof(player_t)); 
+    player_create(&pl);
+    pl->comm_if = shit_if;
+    pl->comm_if.cd = connfd;
+
+    pthread_create(NULL, NULL, mm_player_thread, (void *)pl);
 }
 
 int main()
 {
     signal(SIGSEGV, sigsegv_handler);
-    games_init();
     start_serv();
     for(;;) serv_accept();
 
