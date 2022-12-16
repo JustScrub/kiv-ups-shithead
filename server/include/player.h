@@ -24,7 +24,7 @@ typedef enum {
 } player_state_t;
 
 typedef struct {
-    char *nick;
+    char nick[NIC_LEN+1];
     int id;
     int game_id;
     player_state_t state;

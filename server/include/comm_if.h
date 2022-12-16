@@ -52,6 +52,8 @@ typedef enum {
  * 
  * containts callbacks to communicate with the player
  * 
+ * The send_request callback is used to send a request to the player and recieve the data. 
+ * The data argument passed is the request specific data. If the client replies with data, it is stored in this argument as well.
  */
 typedef struct {
     int cd;                             /**< connection descriptor */

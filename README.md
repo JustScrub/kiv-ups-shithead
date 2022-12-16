@@ -53,7 +53,7 @@ Cards sent in this protocol are represented by the ASCII character 0x30 + card v
 
 ### client:
  - MAIN MENU ->  NICK, data: nick
- - MM CHOICE -> MMC, data: 0 (create lobby) | number (lobby ID) | "RECONN^cache" to reconnect
+ - MM CHOICE -> MMC, data: (0 (create lobby) | number (lobby ID)) | "RECONN^cache" to reconnect
     - cache: the player cache to be verified by the server: "nick^id^game_id"
  - RECONN -> THANKS
 

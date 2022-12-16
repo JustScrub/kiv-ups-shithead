@@ -79,16 +79,18 @@ void *mm_player_thread(void *arg)
     players[i] = pl;
     pthread_mutex_unlock(&pl_mutex);
 
-    pl->comm_if.send_request(pl->comm_if.cd, SRRQ_MAIN_MENU, NULL);
+    pl->comm_if.send_request(pl->comm_if.cd, SRRQ_MAIN_MENU, &pl->nick);
 
     mm_win:
     i = get_lobby_games(lobbies);
     /*pl->comm_if->tell_lobbies((int)arg, lobbies, choice);
     choice = pl->comm_if->mm_choice((int)arg); // blocks*/
     pl->comm_if.send_request(pl->comm_if.cd, SRRQ_LOBBIES, lobbies);
-    pl->comm_if.handle_request(pl->comm_if.cd, allowed_reqs(PL_MAIN_MENU),&choice);
+    pl->comm_if.send_request(pl->comm_if.cd, SRRQ_MM_CHOICE, &choice);
     // Timeout -> choice = -1
-    if(choice<0 || choice>i) goto mm_win;
+    if(choice<0) goto mm_win;
+    if(choice>MAX_GAMES) ; //handle reconnect
+    if(choice>i) goto mm_win; // lobby_cnt < choice < MAX_GAMES
 
 
     pthread_mutex_lock(&gm_mutex);
@@ -127,12 +129,38 @@ void *player_quitter(void *arg) {
     pthread_detach(pthread_self());
     player_t *pl;
     while(1) {
-        pl = quitter_pop();
-        if(pl) {
-            pl->game_id = -1;
+        if(queue_pop(pl,Q_quiter)) {
+            if(pl->comm_if.conn_state != PL_CONN_UP) break;
             pl->state = PL_MAIN_MENU;
-            if(pl->comm_if.conn_state == PL_CONN_UP)
-                pthread_create(NULL,NULL,mm_player_thread,pl);
+            pl->game_id = -1;
+            pthread_create(NULL,NULL,mm_player_thread,pl);
+        }
+        sleep(1);
+    }
+}
+
+void *game_deleter(void *arg)
+{
+    pthread_detach(pthread_self());
+    int gm;
+    while(1) {
+        if(queue_pop(&gm,Q_game_del)) {
+
+            pthread_mutex_lock(&pl_mutex);
+            for(int i=0; i<MAX_PLAYERS*MAX_GAMES; i++)
+                if(players[i] && players[i]->game_id == gm && players[i]->comm_if.conn_state == PL_CONN_DOWN)
+                    players[i] = NULL;
+            pthread_mutex_unlock(&pl_mutex);
+
+            pthread_mutex_lock(&gm_mutex);
+            for(int i=0; i<MAX_GAMES; i++)
+                if(games[i] && games[i]->id == gm)
+                {
+                    game_delete(games[i]);
+                    games[i] = NULL;
+                    break;
+                }
+            pthread_mutex_unlock(&gm_mutex);
         }
         sleep(1);
     }
@@ -203,6 +231,11 @@ void serv_accept()
 int main()
 {
     signal(SIGSEGV, sigsegv_handler);
+
+    init_queues();
+    pthread_create(NULL,NULL,player_quitter,NULL);
+    pthread_create(NULL,NULL,game_deleter,NULL);
+
     start_serv();
     for(;;) serv_accept();
 

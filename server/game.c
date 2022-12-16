@@ -376,8 +376,8 @@ comm_flag_t game_comm(game_t *game, int pl_idx, server_request_t request, void *
 
     if(ret == COMM_DIS)
     {
-        game->players[pl_idx]->comm_if.conn_state = COMM_DIS;
-        quitter_push(game->players[pl_idx]);
+        game->players[pl_idx]->comm_if.conn_state = PL_CONN_DOWN;
+        //quitter_push(game->players[pl_idx]);
         game->players[pl_idx] = NULL;
     }
 
@@ -413,7 +413,7 @@ void *game_thread(void *arg)
         game_comm(game, 0, SRRQ_LOBBY_START, s);
         if(ret == COMM_QUIT || ret == COMM_DIS) goto lobby_owner_quit;
 
-        if(s && game_player_count(game) >= 2) break;
+        if(*s && game_player_count(game) >= 2) break;
     }
 
     free(s);
@@ -421,18 +421,24 @@ void *game_thread(void *arg)
     game_init(game);
     game_loop(game);
 
-    game_delete(game);
+    for(int i=1; i<MAX_PLAYERS; i++)
+    {
+        if(!game->players[i]) continue;
+        quitter_push(game->players[i]);
+    }
+
     pthread_exit(NULL);
+    queue_push(&game->id,Q_game_del);
 
     lobby_owner_quit:
         for(int i=0; i<MAX_PLAYERS; i++)
         {
             if(!game->players[i]) continue;
-            game->players[i]->comm_if->send_request(game->players[i]->comm_if->cd, SRRQ_WRITE, "The lobby owner has quit.");
-            quitter_push(game->players[i]);
+            *s = game->players[i]->comm_if->send_request(game->players[i]->comm_if->cd, SRRQ_WRITE, "The lobby owner has quit.");
+            if(*s != COMM_QUIT || *s != COMM_DIS) queue_push(game->players[i], Q_quiter);
         }
         free(s);
-        game_delete(game);
+        queue_push(&game->id,Q_game_del);
         pthread_exit(NULL);
 }
 
