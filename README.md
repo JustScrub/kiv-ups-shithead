@@ -6,7 +6,7 @@ Server always initiates the communication and either requests data from the clie
 format of communication (s = server, c = client):
   1. request/inform (s)
   2. N/ACK (c)
-  3. reply (c)
+  3. [reply (c)]
 
 format of messages - both requests and replies:
   1. COMMAND (capital chars, underscores in stead of spaces)

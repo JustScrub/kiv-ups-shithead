@@ -111,6 +111,11 @@ inline comm_flag_t ack_handle(int cd, char *bfr)
     return COMM_OK;
 }
 
+inline comm_flag_t quit_handle(int cd, char *bfr)
+{
+    
+}
+
 comm_flag_t send_MAIN_MENU(int cd, char *bfr, void *nick_bfr)
 {
     int ret = *(int *)nick_bfr;
@@ -135,9 +140,71 @@ comm_flag_t send_MAIN_MENU(int cd, char *bfr, void *nick_bfr)
     return COMM_OK;
 }
 
+comm_flag_t send_LOBBY_START(int cd, char *bfr, void *data)
+{
+    sprintf(bfr, "LOBBY START\x0A");
+    int ret = write(cd, bfr, strlen(bfr));
+    if(ret < 0) return COMM_TO;
+    if(ret < strlen(bfr)) return COMM_TO;
+
+    ret = ack_handle(cd, bfr);
+    if(ret != COMM_OK) return ret;
+
+    ret = read(cd, bfr, 3);
+    if(ret < 0) return COMM_TO; //error
+    if(ret == 0) return COMM_DIS;
+    if(ret < 3) return COMM_TO;
+
+    if(!strncmp(bfr, "YES", 3)) *(char*)data = 1;
+    else if(!strncmp(bfr, "NO", 2)) *(char*)data = 0;
+    else return COMM_BS;
+
+    return COMM_OK;
+}
+
+comm_flag_t send_TRADE_NOW(int cd, char *bfr, void *data)
+{
+    sprintf(bfr, "TRADE NOW\x0A");
+    int ret = write(cd, bfr, strlen(bfr));
+    if(ret < 0) return COMM_TO;
+    if(ret < strlen(bfr)) return COMM_TO;
+
+    ret = ack_handle(cd, bfr);
+    if(ret != COMM_OK) return ret;
+
+    ret = read(cd, bfr, 3);
+    if(ret < 0) return COMM_TO; //error
+    if(ret == 0) return COMM_DIS;
+    if(ret < 3) return COMM_TO;
+
+    for(ret = 0; ret < 3; ret++)
+    {
+        bfr[ret] -= 0x30;
+        if(bfr[ret] == 0) continue;
+        if(bfr[ret]  < 2) return COMM_BS;
+        if(bfr[ret]  > 14) return COMM_BS;
+    }
+    return COMM_OK;
+}
+
+comm_flag_t send_ON_TURN(int cd, char *bfr, void *data)
+{
+    sprintf(bfr, "ON TURN^%s\x0A", (char *)data);
+    int ret = write(cd, bfr, strlen(bfr));
+    if(ret < 0) return COMM_TO;
+    if(ret < strlen(bfr)) return COMM_TO;
+
+    return ack_handle(cd, bfr);
+}
+
 comm_flag_t send_WRITE(int cd, char *bfr, void *data)
 {
-    
+    sprintf(bfr, "WRITE^%s\x0A", (char *)data);
+    int ret = write(cd, bfr, strlen(bfr));
+    if(ret < 0) return COMM_TO;
+    if(ret < strlen(bfr)) return COMM_TO;
+
+    return ack_handle(cd, bfr);
 }
 
 
