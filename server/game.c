@@ -427,8 +427,8 @@ void *game_thread(void *arg)
         quitter_push(game->players[i]);
     }
 
-    pthread_exit(NULL);
     queue_push(&game->id,Q_game_del);
+    pthread_exit(NULL);
 
     lobby_owner_quit:
         for(int i=0; i<MAX_PLAYERS; i++)

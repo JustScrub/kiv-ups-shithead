@@ -1,8 +1,11 @@
 #include "shithead_protocol_comm_if.h"
-
+#include "include/config.h"
 //player_request_t cli_rqs_field[] = {PLRQ_MM_CHOICE, /*PLRQ_LOBBY,*/ PLRQ_GAME_STATE, /*PLRQ_TOP_CARD,*/ PLRQ_RECON, /*PLRQ_PING,*/ PLRQ_GAME_START, PLRQ_QUIT};
 //char *cli_rqs_str[] =              {"MM CHOICE", "LOBBY", "GAME STATE", "TOP CARD", "RECON", "PING", "GAME START", "QUIT"};
 //proto_fn cli_rqs_handlers[];
+
+#define ACK_STRLEN 3
+#define BFR_LEN 256
 
 #define RQ2STR(rq) [SRRQ_##rq] = #rq
 char *ser_rqs_str[] = {
@@ -36,6 +39,18 @@ proto_fn bernie_sanders[] = {
 };
 #undef RQ2FN
 
+/**
+ * @brief Increments \c rest up until \c DELIM is found. Meanwhile, copies the characters to \c next
+ * 
+ * the delimiter is not copied and stays in \c rest .
+ * if \c rest is empty, nothing happens.
+ * if \c rest points to \c DELIM, nothing happens.
+ * 
+ * \c next is not cleared before copying nor is it null-terminated.
+ * 
+ * @param rest 
+ * @param next 
+ */
 void consume_proto_part(char **rest, char *next)
 {
      while(**rest&&**rest-DELIM)
@@ -44,10 +59,11 @@ void consume_proto_part(char **rest, char *next)
 
 comm_flag_t shit_req_send(int cd,server_request_t request, void *data)
 {
-    char bfr[256] = {0};
+    char bfr[BFR_LEN];
     comm_flag_t flag;
     int TO_cnt = 0;
     send:
+    bzero(bfr, BFR_LEN);
     flag = bernie_sanders[request](cd,bfr, data);
 
     switch(flag)
@@ -84,8 +100,45 @@ comm_flag_t shit_req_handle(int cd,short rq_bfield, void *data)
 }
 */
 
+inline comm_flag_t ack_handle(int cd, char *bfr)
+{
+    int ret = read(cd, bfr, ACK_STRLEN);
+    if(ret < 0) return COMM_TO; //error
+    if(ret == 0) return COMM_DIS;
+    if(ret < ACK_STRLEN) return COMM_TO;
+    if(strncmp(bfr, "ACK",ACK_STRLEN)) return COMM_BS;
+    bzero(bfr, BFR_LEN);
+    return COMM_OK;
+}
 
+comm_flag_t send_MAIN_MENU(int cd, char *bfr, void *nick_bfr)
+{
+    int ret = *(int *)nick_bfr;
+    sprintf(bfr, "MAIN MENU^%d^%d\x0A", ret, NIC_LEN);
+    ret = write(cd, bfr, strlen(bfr));
+    if(ret < 0) return COMM_TO;
+    
+    ret = ack_handle(cd, bfr);
+    if(ret != COMM_OK) return ret;
 
+    ret = read(cd, bfr, NIC_LEN+3); // +3 for "XX^" where XX is the length of the nick
+    if(ret < 0) return COMM_TO; //error
+    if(ret == 0) return COMM_DIS;
+
+    char nlen[NIC_LEN+3] = {0};
+    consume_proto_part(&bfr, nlen); // nlen contains the length of the nick
+    bfr++; // past the delimiter
+    ret = strtol(nlen, NULL, 10);
+    if(strlen(bfr) != ret) return COMM_BS;
+
+    strncpy((char *)nick_bfr, bfr, ret);
+    return COMM_OK;
+}
+
+comm_flag_t send_WRITE(int cd, char *bfr, void *data)
+{
+    
+}
 
 
 

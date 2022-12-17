@@ -7,7 +7,6 @@ format of communication (s = server, c = client):
   1. request/inform (s)
   2. N/ACK (c)
   3. reply (c)
-  4. N/ACK (s)
 
 format of messages - both requests and replies:
   1. COMMAND (capital chars, underscores in stead of spaces)
@@ -20,7 +19,7 @@ Cards sent in this protocol are represented by the ASCII character 0x30 + card v
 ## messages: 
 ### server:
   - MAIN_MENU - request the player to choose nick
-     - data: player ID
+     - data: player ID^max nick len
   - MM_CHOICE - request the player to choose what to do in Main menu (join/create lobby or reconnect)
   - RECONN - if the player chose to reconnect, let them know the result of the recon
     - data: INVALID|LOBBY|TRADE|RUNNING|FINISHED (one of these)
@@ -52,7 +51,7 @@ Cards sent in this protocol are represented by the ASCII character 0x30 + card v
      - data: the message (terminated by the newline char of the message format)
 
 ### client:
- - MAIN MENU ->  NICK, data: nick
+ - MAIN MENU ->  NICK, data: nick len^nick
  - MM CHOICE -> MMC, data: (0 (create lobby) | number (lobby ID)) | "RECONN^cache" to reconnect
     - cache: the player cache to be verified by the server: "nick^id^game_id"
  - RECONN -> THANKS

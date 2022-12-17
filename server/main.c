@@ -79,6 +79,7 @@ void *mm_player_thread(void *arg)
     players[i] = pl;
     pthread_mutex_unlock(&pl_mutex);
 
+    *((int *)pl->nick) = pl->id;
     pl->comm_if.send_request(pl->comm_if.cd, SRRQ_MAIN_MENU, &pl->nick);
 
     mm_win:

@@ -25,16 +25,27 @@ comm_flag_t shit_req_send(int cd,server_request_t request, void *data);
  */
 
 #define RQFN(x) comm_flag_t send_##x(int cd, char *rest, void *data)
+/** @param data input: player ID, output: player nick*/
 RQFN(MAIN_MENU);
+/** @param data input: none, output: x<0 (TO), x=0 (new lobby), 0<x<MAX_GAMES (enter lobby), "RECON^cache" (reconnect)*/
 RQFN(MM_CHOICE);
+/** @param data input: string to send, output: none*/
 RQFN(RECON);
+/** @param data input: game** (arr of lobbies), output: none*/
 RQFN(LOBBIES);
+/** @param data input: game *, output: none*/
 RQFN(LOBBY_STATE);
+/** @param data input: none, output: 1=start*/
 RQFN(LOBBY_START);
+/** @param data input: none, output: char[3] (cards)*/
 RQFN(TRADE_NOW);
+/** @param data input: player nick, output: none*/
 RQFN(ON_TURN);
+/** @param data input: none, output: card,count*/
 RQFN(GIMME_CARD);
+/** @param data input: game *, output: none*/
 RQFN(GAME_STATE);
+/** @param data input: str to send, output: none*/
 RQFN(WRITE);
 #undef RQFN
 
