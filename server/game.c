@@ -25,13 +25,15 @@ void game_create(player_t *owner, game_t *out)
 bool game_add_player(game_t *game,player_t *pl)
 {
     int i;
+    if(!game || !pl || game->state == GM_FINISHED) return false;
+
     for(i=1;i<MAX_PLAYERS, game->players[i];i++);
 
     if(i<=MAX_PLAYERS)
     {
         game->players[i] = pl;
         pl->game_id = game->id;
-        pl->state = PL_LOBBY;
+        pl->state = game->state == GM_LOBBY? PL_LOBBY : PL_PLAYING_WAITING;
         return true;
     }
     return false;
@@ -251,6 +253,7 @@ void game_loop(game_t *game)
         
         game_comm(game, curr_player, SRRQ_GAME_STATE, game);
         player_trade_cards(game,curr_player);
+        game->players[curr_player]->state = PL_PLAYING_WAITING;
     }
 
     // first player: left-to-right, who has 3 in hand starts first. if no 3, then 4 etc...
@@ -280,6 +283,7 @@ void game_loop(game_t *game)
         player->state = PL_PLAYING_ON_TURN;
 
         game_send_all(game, SRRQ_GAME_STATE, game);
+        game_send_all(game, SRRQ_ON_TURN, player->nick);
         if(!game->players[curr_player]) continue;   // player might have disconnected
 
         // check if player cannot play
@@ -420,6 +424,7 @@ void *game_thread(void *arg)
     game->state = GM_PREPARE;
     game_init(game);
     game_loop(game);
+    game->state = GM_FINISHED;
 
     for(int i=1; i<MAX_PLAYERS; i++)
     {

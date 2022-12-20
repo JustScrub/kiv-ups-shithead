@@ -57,6 +57,7 @@ void consume_proto_part(char **rest, char *next)
     *(next++) = *((*rest)++);
 }
 
+// TODO: close socket on disconnect?
 comm_flag_t shit_req_send(int cd,server_request_t request, void *data)
 {
     char bfr[BFR_LEN];
@@ -100,6 +101,12 @@ comm_flag_t shit_req_handle(int cd,short rq_bfield, void *data)
 }
 */
 
+#define to_dis_handle(readlen) if(readlen == 0) return COMM_DIS; \
+                               if(readlen < 0) return COMM_TO
+#define quit_handle(bfr) if(!strncmp(bfr, "QUIT", 4)) return COMM_QUIT
+#define format_check(bfr, fmt) if(strncmp(bfr, fmt, strlen(fmt))) return COMM_BS; \
+                               else bfr += strlen(fmt)
+
 inline comm_flag_t ack_handle(int cd, char *bfr)
 {
     int ret = read(cd, bfr, ACK_STRLEN);
@@ -109,11 +116,6 @@ inline comm_flag_t ack_handle(int cd, char *bfr)
     if(strncmp(bfr, "ACK",ACK_STRLEN)) return COMM_BS;
     bzero(bfr, BFR_LEN);
     return COMM_OK;
-}
-
-inline comm_flag_t quit_handle(int cd, char *bfr)
-{
-    
 }
 
 comm_flag_t send_MAIN_MENU(int cd, char *bfr, void *nick_bfr)
@@ -126,11 +128,12 @@ comm_flag_t send_MAIN_MENU(int cd, char *bfr, void *nick_bfr)
     ret = ack_handle(cd, bfr);
     if(ret != COMM_OK) return ret;
 
-    ret = read(cd, bfr, NIC_LEN+3); // +3 for "XX^" where XX is the length of the nick
-    if(ret < 0) return COMM_TO; //error
-    if(ret == 0) return COMM_DIS;
+    ret = read(cd, bfr, BFR_LEN); 
+    to_dis_handle(ret);
+    quit_handle(bfr);
+    format_check(bfr, "NICK^");
 
-    char nlen[NIC_LEN+3] = {0};
+    char nlen[NIC_LEN+3] = {0}; // +3 for "XX^" where XX is the length of the nick
     consume_proto_part(&bfr, nlen); // nlen contains the length of the nick
     bfr++; // past the delimiter
     ret = strtol(nlen, NULL, 10);
@@ -151,9 +154,8 @@ comm_flag_t send_LOBBY_START(int cd, char *bfr, void *data)
     if(ret != COMM_OK) return ret;
 
     ret = read(cd, bfr, 3);
-    if(ret < 0) return COMM_TO; //error
-    if(ret == 0) return COMM_DIS;
-    if(ret < 3) return COMM_TO;
+    to_dis_handle(ret);
+    quit_handle(bfr);
 
     if(!strncmp(bfr, "YES", 3)) *(char*)data = 1;
     else if(!strncmp(bfr, "NO", 2)) *(char*)data = 0;
@@ -172,10 +174,10 @@ comm_flag_t send_TRADE_NOW(int cd, char *bfr, void *data)
     ret = ack_handle(cd, bfr);
     if(ret != COMM_OK) return ret;
 
-    ret = read(cd, bfr, 3);
-    if(ret < 0) return COMM_TO; //error
-    if(ret == 0) return COMM_DIS;
-    if(ret < 3) return COMM_TO;
+    ret = read(cd, bfr, BFR_LEN);
+    to_dis_handle(ret);
+    quit_handle(bfr);
+    format_check(bfr, "TRADE^");
 
     for(ret = 0; ret < 3; ret++)
     {
@@ -184,6 +186,7 @@ comm_flag_t send_TRADE_NOW(int cd, char *bfr, void *data)
         if(bfr[ret]  < 2) return COMM_BS;
         if(bfr[ret]  > 14) return COMM_BS;
     }
+    memcpy(data, bfr, 3);
     return COMM_OK;
 }
 
@@ -207,7 +210,62 @@ comm_flag_t send_WRITE(int cd, char *bfr, void *data)
     return ack_handle(cd, bfr);
 }
 
+comm_flag_t send_MM_CHOICE(int cd, char *bfr, void *data)
+{
+    sprintf(bfr, "MM CHOICE\x0A");
+    int ret = write(cd, bfr, strlen(bfr));
+    if(ret < 0) return COMM_TO;
+    if(ret < strlen(bfr)) return COMM_TO;
 
+    ret = ack_handle(cd, bfr);
+    if(ret != COMM_OK) return ret;
+
+    ret = read(cd, bfr, BFR_LEN);
+    if(ret < 0) // Timeout OK with this request
+    {
+        *(long*)data = -1;
+        return COMM_OK;
+    }
+    if(ret == 0) return COMM_DIS;
+    quit_handle(bfr);
+
+    if(!strncmp(bfr, "LB", 2))
+    {
+        bfr += 3; // "LB^"
+        ret = strtol(bfr, NULL, 10);
+        if(ret < 0) return COMM_BS;
+        if(ret > MAX_GAMES) return COMM_BS;
+        *(long*)data = ret;
+        return COMM_OK;
+    }
+    else if(!strncmp(bfr, "RECON", 5))
+    {
+        //in data: "RECON^nick^player_id^game_id"
+        //out data: recon_cache_t*
+        bfr += 6; // "RECON^"
+        recon_cache_t *rc = calloc(1,sizeof(recon_cache_t));
+        char *tmp = alloca(NIC_LEN);
+        bzero(tmp, NIC_LEN);
+
+        consume_proto_part(&bfr, tmp); // tmp=nick
+        strncpy(rc->nick, tmp, NIC_LEN);
+        bfr++; // past the delimiter
+        bzero(tmp, NIC_LEN);
+
+        consume_proto_part(&bfr, tmp); // tmp=player_id
+        rc->id = strtol(tmp, NULL, 10);
+        bfr++; // past the delimiter
+        bzero(tmp, NIC_LEN);
+
+        consume_proto_part(&bfr, tmp); // tmp=game_id; *bfr should be \0
+        rc->gid = strtol(tmp, NULL, 10);
+
+        *(recon_cache_t**)data = rc;
+        return COMM_OK;
+    }
+    else return COMM_BS;
+
+}
 
 
 

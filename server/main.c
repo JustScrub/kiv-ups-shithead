@@ -59,6 +59,33 @@ int get_lobby_games(game_t **lobbies)
     return cnt;
 }
 
+char check_recon_cache(recon_cache_t *cache)
+{
+    /*to check: nick, pid, gid and player connection must be down*/
+    pthread_mutex_lock(&pl_mutex);
+
+    player_t *pl = NULL;
+    for(int i=0; i<MAX_PLAYERS*MAX_GAMES; i++)
+    {
+        if(players[i] && players[i]->id==cache->id)
+        {
+            pl = players[i];
+            break;
+        }
+    }
+
+    if( !pl || 
+        pl->game_id != cache->gid || 
+        pl->comm_if.conn_state == PL_CONN_UP ||
+        strncmp(pl->nick, cache->nick,NIC_LEN))
+    {
+        pthread_mutex_unlock(&pl_mutex);
+        return 0;
+    }
+
+    pthread_mutex_unlock(&pl_mutex);
+    return cache->gid;
+}
 
 player_comm_if_t shit_if = {
     .send_request = shit_req_send,
@@ -70,8 +97,8 @@ player_comm_if_t shit_if = {
 void *mm_player_thread(void *arg)
 {
     pthread_detach(pthread_self());
-    int i; unsigned choice;
-    game_t **lobbies = NULL;
+    int i; long choice;
+    game_t **lobbies = malloc(sizeof(game_t *)); // just to free it in the first mm_win pass
     player_t *pl = (player_t *)arg;
 
     pthread_mutex_lock(&pl_mutex);
@@ -83,6 +110,7 @@ void *mm_player_thread(void *arg)
     pl->comm_if.send_request(pl->comm_if.cd, SRRQ_MAIN_MENU, &pl->nick);
 
     mm_win:
+    free(lobbies);
     i = get_lobby_games(lobbies);
     /*pl->comm_if->tell_lobbies((int)arg, lobbies, choice);
     choice = pl->comm_if->mm_choice((int)arg); // blocks*/
@@ -90,8 +118,9 @@ void *mm_player_thread(void *arg)
     pl->comm_if.send_request(pl->comm_if.cd, SRRQ_MM_CHOICE, &choice);
     // Timeout -> choice = -1
     if(choice<0) goto mm_win;
-    if(choice>MAX_GAMES) ; //handle reconnect
+    if(choice>MAX_GAMES) goto recon_handle;
     if(choice>i) goto mm_win; // lobby_cnt < choice < MAX_GAMES
+    // 0 <= choice <= i <= MAX_GAMES
 
 
     pthread_mutex_lock(&gm_mutex);
@@ -105,7 +134,7 @@ void *mm_player_thread(void *arg)
             pl->comm_if->send_request(pl->comm_if->cd, SRRQ_WRITE, "Sorry, game started or lobby full. Choose again.");
 
 
-            free(lobbies);
+            //free(lobbies);
             pthread_mutex_unlock(&gm_mutex);
             goto mm_win;
         }
@@ -124,6 +153,36 @@ void *mm_player_thread(void *arg)
     free(lobbies);
     pthread_mutex_unlock(&gm_mutex);
     pthread_exit(NULL);
+
+    recon_handle:
+    //free(lobbies);
+        if(!(i = check_recon_cache((recon_cache_t *)choice)))
+        {
+            //pl->comm_if->write(pl->comm_if->cd, "Invalid choice. Choose again.");
+            pl->comm_if->send_request(pl->comm_if->cd, SRRQ_WRITE, "Game finished or invalid cache. Choose again.");
+            goto mm_win;
+        }
+
+        pthread_mutex_lock(&gm_mutex);
+        for(choice = 0; choice<MAX_GAMES; choice++)
+        {
+            if(games[choice]->id == i) break;
+        }
+        if(choice == MAX_GAMES || games[choice]->state == GM_FINISHED) 
+        { 
+            pl->comm_if->send_request(pl->comm_if->cd, SRRQ_WRITE, "Game finished. Choose again.");
+            pthread_mutex_unlock(&gm_mutex);
+            goto mm_win; // game finished
+        }
+        if(!game_add_player(games[choice],pl))
+        {
+            pl->comm_if->send_request(pl->comm_if->cd, SRRQ_WRITE, "Game full. Choose again.");
+            pthread_mutex_unlock(&gm_mutex);
+            goto mm_win; // game full
+        }
+        pthread_mutex_unlock(&gm_mutex);
+        free(lobbies);
+        pthread_exit(NULL);
 }
 
 void *player_quitter(void *arg) {
@@ -149,8 +208,11 @@ void *game_deleter(void *arg)
 
             pthread_mutex_lock(&pl_mutex);
             for(int i=0; i<MAX_PLAYERS*MAX_GAMES; i++)
-                if(players[i] && players[i]->game_id == gm && players[i]->comm_if.conn_state == PL_CONN_DOWN)
-                    players[i] = NULL;
+                if(players[i] && players[i]->game_id == gm)
+                    if(players[i]->comm_if.conn_state == PL_CONN_UP)
+                        queue_push(players[i],Q_quiter); // quit any players still in the game (somehow)
+                    else
+                        players[i] = NULL;
             pthread_mutex_unlock(&pl_mutex);
 
             pthread_mutex_lock(&gm_mutex);
