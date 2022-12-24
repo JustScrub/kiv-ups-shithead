@@ -36,6 +36,7 @@ typedef struct {
 } player_t;
 
 void player_create(player_t *out);
+void player_clear(player_t *player);
 
 int player_hand_card_cnt(player_t *player);
 /**

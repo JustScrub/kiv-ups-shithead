@@ -13,7 +13,7 @@
  */
 typedef enum {
     GM_LOBBY = 0,          /**< game in lobby. Owner player can start game */
-    GM_PREPARE,        /**< Players trading cards */
+    GM_PREPARE,        /**< Deck shuffle, add cards etc.*/
     GM_PLAYING,        /**< game is in play. */
     GM_FINISHED        /**< Game is finished. Will be deleted soon. */
 } game_state_t;

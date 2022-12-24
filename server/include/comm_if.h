@@ -6,7 +6,7 @@
 
 typedef enum {
     PL_CONN_DOWN = 0,
-    PL_CONN_UP
+    PL_CONN_UP,
 } player_conn_state_t;
 
 /*
@@ -58,7 +58,7 @@ typedef enum {
 typedef struct {
     int cd;                             /**< connection descriptor */
     player_conn_state_t conn_state;     /**< conncection state of the player */
-    comm_flag_t (*send_request)(int cd,server_request_t request, void *data); /**< Send a request to the client with some data and recieve the data*/
+    comm_flag_t (*send_request)(int cd,server_request_t request, void *data, int dlen); /**< Send a request to the client with some data and recieve the data*/
 } player_comm_if_t;
 
 #endif

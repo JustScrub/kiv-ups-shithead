@@ -5,13 +5,17 @@ static int pl_id = 0;
 void player_create(player_t *out)
 {
     out->id = ++pl_id;
-    memset(out->hand, 0, 13*sizeof(int));
-    memset(out->face_up, INVALID_CARD, 3*sizeof(card_t));
-    memset(out->face_down, INVALID_CARD, 3*sizeof(card_t));
-    out->game_id = -1;
-    out->state = PL_MAIN_MENU;
+    player_clear(out);
 }
 
+void player_clear(player_t *player)
+{
+    memset(player->hand, 0, 13*sizeof(int));
+    memset(player->face_up, INVALID_CARD, 3*sizeof(card_t));
+    memset(player->face_down, INVALID_CARD, 3*sizeof(card_t));
+    player->game_id = -1;
+    player->state = PL_MAIN_MENU;
+}
 
 int player_hand_card_cnt(player_t *player)
 {
@@ -94,6 +98,7 @@ bool player_play_cards(player_t *player, card_t card, int cnt, card_stack_t *pla
 
 bool player_draw_cards(player_t *player, int cnt, card_stack_t *draw_deck)
 {
+    if(!player) return false;
     card_t card = card_stack_peek(draw_deck, 0);
     for(; cnt > 0; cnt--)
     {

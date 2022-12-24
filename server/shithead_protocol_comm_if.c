@@ -57,13 +57,15 @@ void consume_proto_part(char **rest, char *next)
     *(next++) = *((*rest)++);
 }
 
-// TODO: close socket on disconnect?
-comm_flag_t shit_req_send(int cd,server_request_t request, void *data)
+comm_flag_t shit_req_send(int cd,server_request_t request, void *data, int dlen)
 {
     char bfr[BFR_LEN];
     comm_flag_t flag;
     int TO_cnt = 0;
+    char dcpy[dlen];
+    memcpy(dcpy,data,dlen);
     send:
+    memcpy(data,dcpy,dlen);
     bzero(bfr, BFR_LEN);
     flag = bernie_sanders[request](cd,bfr, data);
 
@@ -71,11 +73,15 @@ comm_flag_t shit_req_send(int cd,server_request_t request, void *data)
     {
         case COMM_TO:
         case COMM_BS:
-            if(TO_cnt++ > 3) return flag;
+            if(TO_cnt++ > 3) { close(cd); break; }
             goto send;
+        case COMM_DIS:
+            close(cd);
+            break;
         default:
-            return flag;
+            break;
     }
+    return flag;
 }
 
 /*
@@ -267,9 +273,87 @@ comm_flag_t send_MM_CHOICE(int cd, char *bfr, void *data)
 
 }
 
+comm_flag_t send_GIMME_CARD(int cd, char *bfr, void *data)
+{
+    sprintf(bfr, "GIMME CARD\x0A");
+    int ret = write(cd, bfr, strlen(bfr));
+    if(ret < 0) return COMM_TO;
+    if(ret < strlen(bfr)) return COMM_TO;
 
+    ret = ack_handle(cd, bfr);
+    if(ret != COMM_OK) return ret;
 
+    ret = read(cd, bfr, BFR_LEN);
+    to_dis_handle(ret);
+    quit_handle(bfr);
+    format_check(bfr, "CARD^");
 
+    ret = *bfr++ - 0x30;
+    if(!card_is_valid(ret)) return COMM_BS;
+    if(*bfr != '^') return COMM_BS;
+    *(int*)data = ret;
+    bfr++; // past the delimiter
+
+    ret = strtol(bfr, &bfr, 10);
+    if(ret <= 0) return COMM_BS;
+    if(ret > 4*DECK_NUM) return COMM_BS;
+    *(int*)data |= ret << 8;
+
+    return COMM_OK;
+}
+
+comm_flag_t send_RECON(int cd, char *bfr, void *data)
+{
+    sprintf(bfr, "RECON^%s\x0A", (char *)data);
+    int ret = write(cd, bfr, strlen(bfr));
+    if(ret < 0) return COMM_TO;
+    if(ret < strlen(bfr)) return COMM_TO;
+
+    return ack_handle(cd, bfr);
+}
+
+comm_flag_t send_LOBBY_STATE(int cd, char *bfr, void *data)
+{
+    game_t *g = (game_t*)data;
+    int cnt;
+    for(int i=0; i<MAX_PLAYERS; i++)
+    {
+        if(!g->players[i]) continue;
+        cnt++;
+        sprintf(bfr, "%s^%s",bfr, g->players[i]->nick);
+    }
+    sprintf(bfr, "LOBBY STATE^%d%s\x0A", cnt, bfr);
+    int ret = write(cd, bfr, strlen(bfr));
+    if(ret < 0) return COMM_TO;
+    if(ret < strlen(bfr)) return COMM_TO;
+
+    return ack_handle(cd, bfr);
+}
+
+comm_flag_t send_LOBBIES(int cd, char *bfr, void *data)
+{
+    game_t **g = (game_t**)data;
+    int cnt;
+    for(;*g;g++)
+    {
+        cnt = 0;
+        for(int i=0; i<MAX_PLAYERS; i++)
+        {
+            if(!(*g)->players[i]) continue;
+            cnt++;
+        }
+        sprintf(bfr, "%s^%d:%d",bfr,(*g)->id, cnt);
+    }
+    sprintf(bfr, "LOBBIES^%s\x0A", bfr);
+    int ret = write(cd, bfr, strlen(bfr));
+    if(ret < 0) return COMM_TO;
+    if(ret < strlen(bfr)) return COMM_TO;
+
+    return ack_handle(cd, bfr);
+}
+/* todo:
+    GAM_STATE
+*/
 
 
 card_t shit_read_card(int cd, int *cnt)

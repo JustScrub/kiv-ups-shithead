@@ -17,7 +17,7 @@ typedef struct {
    int gid;
 } recon_cache_t;
 
-comm_flag_t shit_req_send(int cd,server_request_t request, void *data);
+comm_flag_t shit_req_send(int cd,server_request_t request, void *data, int dlen);
 
 /**
  * @brief Handle request

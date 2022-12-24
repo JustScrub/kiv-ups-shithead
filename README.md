@@ -22,17 +22,16 @@ Cards sent in this protocol are represented by the ASCII character 0x30 + card v
      - data: player ID^max nick len
   - MM_CHOICE - request the player to choose what to do in Main menu (join/create lobby or reconnect)
   - RECONN - if the player chose to reconnect, let them know the result of the recon
-    - data: INVALID|LOBBY|TRADE|RUNNING|FINISHED (one of these)
+    - data: INVALID|LOBBY|RUNNING|FINISHED (one of these)
       - INVALID|FINISHED: player sent invalid cache or game finished -> must choose a lobby
-      - LOBBY|TRADE|RUNNING: reconn succesful + tell the phase of the game.
+      - LOBBY|RUNNING: reconn succesful + tell the phase of the game.
 
   - LOBBIES - tell the client the lobbies
-     - data: "LOBBYi^N^nick1^nick2...^nickN^LOBBYi+1...", where:
+     - data: "i:N^i+1:N...", where:
        - i is ID of lobby, 
        - N is number of connected people, 
-       - nickI is the nick of I-th person.
   - LOBBY_STATE - tell the player state of the lobby
-     - data: nicks of players in the lobby, first one being the owner
+     - data: number and nicks of players in the lobby, first one being the owner
   - LOBBY_START - request the lobby owner to start the game
 
   - TRADE_NOW - request the player to trade cards before game starts and tell the result
