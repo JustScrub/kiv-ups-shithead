@@ -36,6 +36,7 @@ pthread_mutex_t pl_mutex = PTHREAD_MUTEX_INITIALIZER , gm_mutex = PTHREAD_MUTEX_
 
 int serv_fd;
 
+// TODO: don't pass ptrs, but arr of arrs: {{id,player_cnt}, ...}
 int get_lobby_games(game_t **lobbies)
 {
     pthread_mutex_lock(&gm_mutex);

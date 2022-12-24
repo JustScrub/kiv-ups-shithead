@@ -315,14 +315,13 @@ comm_flag_t send_RECON(int cd, char *bfr, void *data)
 comm_flag_t send_LOBBY_STATE(int cd, char *bfr, void *data)
 {
     game_t *g = (game_t*)data;
-    int cnt;
+    int len = sprintf(bfr, "LOBBY STATE");
     for(int i=0; i<MAX_PLAYERS; i++)
     {
         if(!g->players[i]) continue;
-        cnt++;
-        sprintf(bfr, "%s^%s",bfr, g->players[i]->nick);
+        len += snprintf(bfr+len, BFR_LEN-len, "^%s", g->players[i]->nick);
     }
-    sprintf(bfr, "LOBBY STATE^%d%s\x0A", cnt, bfr);
+    strncat(bfr, "\x0A", 1);
     int ret = write(cd, bfr, strlen(bfr));
     if(ret < 0) return COMM_TO;
     if(ret < strlen(bfr)) return COMM_TO;
@@ -334,6 +333,7 @@ comm_flag_t send_LOBBIES(int cd, char *bfr, void *data)
 {
     game_t **g = (game_t**)data;
     int cnt;
+    int len = sprintf(bfr, "LOBBIES");
     for(;*g;g++)
     {
         cnt = 0;
@@ -342,9 +342,9 @@ comm_flag_t send_LOBBIES(int cd, char *bfr, void *data)
             if(!(*g)->players[i]) continue;
             cnt++;
         }
-        sprintf(bfr, "%s^%d:%d",bfr,(*g)->id, cnt);
+        len += snprintf(bfr+len,BFR_LEN-len, "^%d:%d",(*g)->id, cnt);
     }
-    sprintf(bfr, "LOBBIES^%s\x0A", bfr);
+    strncat(bfr, "\x0A", 1);
     int ret = write(cd, bfr, strlen(bfr));
     if(ret < 0) return COMM_TO;
     if(ret < strlen(bfr)) return COMM_TO;

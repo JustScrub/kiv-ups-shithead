@@ -31,7 +31,7 @@ Cards sent in this protocol are represented by the ASCII character 0x30 + card v
        - i is ID of lobby, 
        - N is number of connected people, 
   - LOBBY_STATE - tell the player state of the lobby
-     - data: number and nicks of players in the lobby, first one being the owner
+     - data: nicks of players in the lobby, first one being the owner
   - LOBBY_START - request the lobby owner to start the game
 
   - TRADE_NOW - request the player to trade cards before game starts and tell the result
