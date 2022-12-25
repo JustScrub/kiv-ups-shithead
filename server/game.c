@@ -61,7 +61,7 @@ int game_player_count(game_t *game)
     int cnt = 0;
     for(int i; i<MAX_PLAYERS;i++)
     {
-        if(game->players[i] && game->players[i]->comm_if->conn_state)
+        if(game->players[i] && game->players[i]->comm_if.conn_state)
         {
             cnt++;
         }
@@ -76,7 +76,7 @@ int game_playing_count(game_t *game)
     for(int i; i<MAX_PLAYERS;i++)
     {
         if(game->players[i] && 
-           game->players[i]->comm_if->conn_state && 
+           game->players[i]->comm_if.conn_state && 
            game->players[i]->state != PL_DONE)
         {
             cnt++;
@@ -429,7 +429,7 @@ comm_flag_t game_comm(game_t *game, int pl_idx, server_request_t request, void *
 {
     comm_flag_t ret;
     if(!game->players[pl_idx]) return COMM_DIS;
-    ret = game->players[pl_idx]->comm_if->send_request(game->players[pl_idx]->comm_if->cd, request, data, dlen);
+    ret = game->players[pl_idx]->comm_if.send_request(game->players[pl_idx]->comm_if.cd, request, data, dlen);
     ret = flag_map[ret];
     /*
     if(send)
@@ -438,7 +438,7 @@ comm_flag_t game_comm(game_t *game, int pl_idx, server_request_t request, void *
     */
     if(ret == COMM_QUIT)
     {
-        quitter_push(game->players[pl_idx]);
+        queue_push(game->players[pl_idx], Q_quiter);
         game->players[pl_idx] = NULL;
     }
 
@@ -451,6 +451,8 @@ comm_flag_t game_comm(game_t *game, int pl_idx, server_request_t request, void *
 
     return ret;
 }
+
+#include <pthread.h>
 
 void *game_thread(void *arg)
 {
@@ -494,7 +496,7 @@ void *game_thread(void *arg)
     for(int i=1; i<MAX_PLAYERS; i++)
     {
         if(!game->players[i]) continue;
-        quitter_push(game->players[i]);
+        queue_push(game->players[i], Q_quiter);
     }
 
     queue_push(&game->id,Q_game_del);
@@ -506,7 +508,7 @@ void *game_thread(void *arg)
             if(!game->players[i]) continue;
             game_comm(game,i,SRRQ_WRITE, "The lobby owner has quit.", strlen("The lobby owner has quit."));
             if(game->players[i])
-                quitter_push(game->players[i]);
+                queue_push(game->players[i], Q_quiter);
         }
         free(s);
         queue_push(&game->id,Q_game_del);

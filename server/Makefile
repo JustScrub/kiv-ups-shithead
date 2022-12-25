@@ -1,11 +1,10 @@
 CC=gcc
-OUT=main
+OUT=server
 
 all: $(OUT)
 
-main: 
-	$(CC) -o $(OUT) -pthread *.c -w
-	chmod 711 $(OUT)
+$(OUT): 
+	$(CC) -Iinclude *.c -lpthread  -o $(OUT)
 
 clean: 
 	rm $(OUT)

@@ -113,7 +113,7 @@ comm_flag_t shit_req_handle(int cd,short rq_bfield, void *data)
 #define format_check(bfr, fmt) if(strncmp(bfr, fmt, strlen(fmt))) return COMM_BS; \
                                else bfr += strlen(fmt)
 
-inline comm_flag_t ack_handle(int cd, char *bfr)
+comm_flag_t ack_handle(int cd, char *bfr)
 {
     int ret = read(cd, bfr, ACK_STRLEN);
     if(ret < 0) return COMM_TO; //error
@@ -326,7 +326,7 @@ comm_flag_t send_LOBBY_STATE(int cd, char *bfr, void *data)
         if(!g->players[i]) continue;
         len += snprintf(bfr+len, BFR_LEN-len, "^%s", g->players[i]->nick);
     }
-    strncat(bfr, "\x0A", 1);
+    strncat(bfr, "\x0A", 2);
     int ret = write(cd, bfr, strlen(bfr));
     if(ret < 0) return COMM_TO;
     if(ret < strlen(bfr)) return COMM_TO;
@@ -349,7 +349,7 @@ comm_flag_t send_LOBBIES(int cd, char *bfr, void *data)
         }
         len += snprintf(bfr+len,BFR_LEN-len, "^%d:%d",(*g)->id, cnt);
     }
-    strncat(bfr, "\x0A", 1);
+    strncat(bfr, "\x0A", 2);
     int ret = write(cd, bfr, strlen(bfr));
     if(ret < 0) return COMM_TO;
     if(ret < strlen(bfr)) return COMM_TO;
@@ -405,7 +405,7 @@ comm_flag_t send_GAME_STATE(int cd, char *bfr, void *data)
         len += fmask(g->players[i], bfr+len);
  
     }
-    strncat(bfr, "\x0A", 1);
+    strncat(bfr, "\x0A", 2);
     int ret = write(cd, bfr, strlen(bfr));
     if(ret < 0) return COMM_TO;
     if(ret < strlen(bfr)) return COMM_TO;

@@ -112,7 +112,7 @@ bool game_check_burn_pile(game_t *game);
  */
 comm_flag_t game_comm(game_t *game, int pl_idx, server_request_t request, void *data, int dlen);
 
-void game_send_all(game_t *game, server_request_t request, void *data);
+void game_send_all(game_t *game, server_request_t request, void *data, int dlen);
 
 void *game_thread(void *arg);
 

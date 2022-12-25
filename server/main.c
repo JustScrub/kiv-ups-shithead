@@ -138,7 +138,7 @@ void *mm_player_thread(void *arg)
            game_player_count(lobbies[choice]) == MAX_PLAYERS ||
            !game_add_player(lobbies[choice], pl))
         {
-            ret = pl->comm_if->send_request(pl->comm_if->cd, SRRQ_WRITE, "Sorry, game started or lobby full. Choose again.", strlen("Sorry, game started or lobby full. Choose again."));
+            ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_WRITE, "Sorry, game started or lobby full. Choose again.", strlen("Sorry, game started or lobby full. Choose again."));
             pthread_mutex_unlock(&gm_mutex);
             if(ret != COMM_OK) goto player_exit;
             goto mm_win;
@@ -152,7 +152,7 @@ void *mm_player_thread(void *arg)
     for(choice=0;choice < MAX_GAMES && games[choice];choice++) ;
     if(choice == MAX_GAMES)
     {
-        ret = pl->comm_if->send_request(pl->comm_if->cd, SRRQ_WRITE, "Sorry, no more games available. Choose again.", strlen("Sorry, no more games available. Choose again."));
+        ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_WRITE, "Sorry, no more games available. Choose again.", strlen("Sorry, no more games available. Choose again."));
         pthread_mutex_unlock(&gm_mutex);
         if(ret != COMM_OK) goto player_exit;
         goto mm_win;
@@ -165,16 +165,16 @@ void *mm_player_thread(void *arg)
     pthread_mutex_unlock(&gm_mutex);
     pthread_exit(NULL);
 
-    recon_handle:
+    recon_handle: ;
         int reconidx = -1;
         if(!(i = check_recon_cache((recon_cache_t *)choice, &reconidx)))
         {
-            ret = pl->comm_if.send_request(pl->comm_if->cd, SRRQ_RECON, "INVALID", strlen("INVALID"));
-            free(choice);
+            ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_RECON, "INVALID", strlen("INVALID"));
+            free((recon_cache_t *)choice);
             if(ret != COMM_OK) goto player_exit;
             goto mm_win;
         }
-        free(choice);
+        free((recon_cache_t *)choice);
 
         pthread_mutex_lock(&gm_mutex);
         for(choice = 0; choice<MAX_GAMES; choice++)
@@ -183,7 +183,7 @@ void *mm_player_thread(void *arg)
         }
         if(choice == MAX_GAMES || games[choice]->state == GM_FINISHED) 
         { 
-            ret = pl->comm_if->send_request(pl->comm_if->cd, SRRQ_RECON, "FINISHED", strlen("FINISHED"));
+            ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_RECON, "FINISHED", strlen("FINISHED"));
             if(ret != COMM_OK) goto player_exit;
             goto mm_win; // game finished
         }
@@ -195,7 +195,7 @@ void *mm_player_thread(void *arg)
         pthread_mutex_lock(&pl_mutex);
         if(!players[reconidx]) // might have gotten deletd
         {
-            ret = pl->comm_if->send_request(pl->comm_if.cd, SRRQ_RECON, "INVALID", strlen("INVALID"));
+            ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_RECON, "INVALID", strlen("INVALID"));
             pthread_mutex_unlock(&pl_mutex);
             pthread_mutex_unlock(&gm_mutex);
             if(ret != COMM_OK) goto player_exit;
@@ -205,7 +205,7 @@ void *mm_player_thread(void *arg)
         players[reconidx]->comm_if.conn_state = PL_CONN_UP;
         if(!game_add_player(games[choice],players[reconidx]))
         {
-            ret = pl->comm_if->send_request(pl->comm_if.cd, SRRQ_RECON, "INVALID", strlen("INVALID"));
+            ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_RECON, "INVALID", strlen("INVALID"));
             free(players[reconidx]); players[reconidx] = NULL;
             pthread_mutex_unlock(&pl_mutex);
             pthread_mutex_unlock(&gm_mutex);
@@ -266,6 +266,12 @@ void *game_deleter(void *arg)
         sleep(1);
     }
 }
+
+/**
+ * @TODO
+ * PARAMETRIZE IP, PORT
+ * 
+ */
 
 void start_serv()
 {
@@ -331,7 +337,7 @@ void serv_accept()
 
 int main()
 {
-    signal(SIGSEGV, sigsegv_handler);
+    //signal(SIGSEGV, sigsegv_handler);
 
     init_queues();
     pthread_create(NULL,NULL,player_quitter,NULL);

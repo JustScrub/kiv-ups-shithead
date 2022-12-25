@@ -1,8 +1,8 @@
 #ifndef __SHITHEAD_COMM_IF_H__
 #define __SHITHEAD_COMM_IF_H__
 
-#include "include/game.h"
-#include "include/player.h"
+//#include "game.h"
+//#include "player.h"
 
 typedef enum {
     PL_CONN_DOWN = 0,
