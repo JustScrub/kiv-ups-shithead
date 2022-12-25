@@ -39,12 +39,14 @@ Cards sent in this protocol are represented by the ASCII character 0x30 + card v
      - data: player nick
   - GIMME_CARD - request the player to play a card
   - GAME_STATE 
-      - data: "YOUR CARDS^HAND^2s^3s...Ks^As^FACE UP^fmask^FACE DOWN^dmask^TOP CARD^card^FACE UPS^nick1^fmask1...^nickN^fmaskN^DRAW SIZE^dn", where: 
-        - data between HAND and "FACE UP" is the number of 2s, 3s... and so on (up to As) the player has, 
-        - fmask is 3 characters representing face-up cards, 
-        - dmask is 3 characters - 1s or 0s - 1s in positions of face down cards still on board, 
-        - the part after "FACE UPS" specifies the face up cards of other players represented in "fmask format" and 
-        - dn is the number of cards in the draw deck.
+      - data: "nick1:2s,3s,...,Ks,As:fmask:dmask^nick2:hand_cnt:fmask:dmask^...^T:card^D:draw_num", where: 
+        - nick1, nick2, ... are nicks of players in the game
+         - 2s, 3s, ..., Ks, As are numbers of cards in hand of the player, only after recieving player's nick
+         - fmask is a mask of face ups, 3 bytes, each the faceup, '0' if no card
+         - dmask is a mask of face downs, 3 bytes, either '0' or '1' for there or not there
+         - hand_cnt is the number of cards in hand of the player who's not the reciever of the message
+         - T:card is the top card
+         - D:draw_num is the number of cards in draw pile
 
   - WRITE - the server writes a simple message to the client
      - data: the message (terminated by the newline char of the message format)
@@ -61,7 +63,7 @@ Cards sent in this protocol are represented by the ASCII character 0x30 + card v
 
  - TRADE NOW -> TRADE, data: 3 cards the player has in hand, order = which face up to trade, 0 for no trade
  - ON TURN -> THANKS, data: none
- - GIMME CARD -> CARD, data: "card^n", n=number of them
+ - GIMME CARD -> CARD, data: "card^n", n=number of them or "idx^1" if plays from face down
  - GAME STATE -> THANKS, data: none
 
  - WRITE -> THANKS, data: none

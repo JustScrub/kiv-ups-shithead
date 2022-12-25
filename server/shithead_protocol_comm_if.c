@@ -229,7 +229,7 @@ comm_flag_t send_MM_CHOICE(int cd, char *bfr, void *data)
     ret = read(cd, bfr, BFR_LEN);
     if(ret < 0) // Timeout OK with this request
     {
-        *(long*)data = -1;
+        *(int64_t*)data = -1;
         return COMM_OK;
     }
     if(ret == 0) return COMM_DIS;
@@ -241,7 +241,7 @@ comm_flag_t send_MM_CHOICE(int cd, char *bfr, void *data)
         ret = strtol(bfr, NULL, 10);
         if(ret < 0) return COMM_BS;
         if(ret > MAX_GAMES) return COMM_BS;
-        *(long*)data = ret;
+        *(int64_t*)data = ret;
         return COMM_OK;
     }
     else if(!strncmp(bfr, "RECON", 5))
@@ -289,7 +289,12 @@ comm_flag_t send_GIMME_CARD(int cd, char *bfr, void *data)
     format_check(bfr, "CARD^");
 
     ret = *bfr++ - 0x30;
-    if(!card_is_valid(ret)) return COMM_BS;
+
+    if(*(int*)data) // plays from face-down => read idx of card, not card itself
+        if(ret < 0 || ret > 2) return COMM_BS;
+    else
+        if(!card_is_valid(ret)) return COMM_BS;
+
     if(*bfr != '^') return COMM_BS;
     *(int*)data = ret;
     bfr++; // past the delimiter
@@ -351,9 +356,62 @@ comm_flag_t send_LOBBIES(int cd, char *bfr, void *data)
 
     return ack_handle(cd, bfr);
 }
-/* todo:
-    GAM_STATE
-*/
+
+int dmask(player_t *pl, char *bfr)
+{
+    for(int i=0; i<3; i++)
+    {
+        bfr[i] = card_is_valid(pl->face_down[i]) + 0x30;
+    }
+    return 3;
+}
+int fmask(player_t *pl, char *bfr)
+{
+    for(int i=0; i<3; i++)
+    {
+        bfr[i] = pl->face_up[i] + 0x30;
+    }
+    return 3;
+}
+int hmask(player_t *pl, char *bfr, int blen)
+{
+    int len = 0;
+    for(int i=0; i<13; i++)
+    {
+        len += snprintf(bfr+len, blen-len, "%d,", pl->hand[i]);
+    }
+    bfr[len-1] = 0;
+    return len-1;
+}
+comm_flag_t send_GAME_STATE(int cd, char *bfr, void *data)
+{
+    game_t *g = (game_t*)data;
+    int len = sprintf(bfr, "GAME STATE");
+    for(int i=0; i<MAX_PLAYERS; i++)
+    {
+        if(!g->players[i]) continue;
+        len += snprintf(bfr+len, BFR_LEN-len, "^%s", g->players[i]->nick);
+        if(cd != g->players[i]->comm_if.cd)
+        {
+            len += snprintf(bfr+len, BFR_LEN-len, ":%d", player_hand_card_cnt(g->players[i]));
+        }
+        else
+        {
+            len += hmask(g->players[i], bfr+len, BFR_LEN-len);
+        }
+        (bfr+len++)[0] = ':';
+        len += dmask(g->players[i], bfr+len);
+        (bfr+len++)[0] = ':';
+        len += fmask(g->players[i], bfr+len);
+ 
+    }
+    strncat(bfr, "\x0A", 1);
+    int ret = write(cd, bfr, strlen(bfr));
+    if(ret < 0) return COMM_TO;
+    if(ret < strlen(bfr)) return COMM_TO;
+
+    return ack_handle(cd, bfr);
+}
 
 
 card_t shit_read_card(int cd, int *cnt)

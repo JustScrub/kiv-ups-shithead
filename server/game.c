@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <string.h>
 
 static int gm_id = 0;
 
@@ -61,6 +62,22 @@ int game_player_count(game_t *game)
     for(int i; i<MAX_PLAYERS;i++)
     {
         if(game->players[i] && game->players[i]->comm_if->conn_state)
+        {
+            cnt++;
+        }
+    }
+    return cnt;
+}
+
+int game_playing_count(game_t *game)
+{
+    int cnt = 0;
+    if(game->state != GM_PLAYING) return 0;
+    for(int i; i<MAX_PLAYERS;i++)
+    {
+        if(game->players[i] && 
+           game->players[i]->comm_if->conn_state && 
+           game->players[i]->state != PL_DONE)
         {
             cnt++;
         }
@@ -222,6 +239,7 @@ bool game_check_burn_pile(game_t *game)
 int game_check_illegal(game_t *game, player_t *player, card_t card, int cnt)
 {
     int reason = (player_plays_from(player) == PL_PILE_F_DWN)+1;
+    if(!card_is_valid(card)) return 1;
     int top = game_get_top_card(game);
     if(game->active_8)
     {
@@ -263,15 +281,19 @@ void game_loop(game_t *game)
     player_t *player;
     comm_flag_t ret;
 
+    game_send_all(game, SRRQ_GAME_STATE, game, sizeof(game_t *));
+
     // Players trading
     for(curr_player = 0; curr_player < MAX_PLAYERS; curr_player++)
     {
         if(!game->players[curr_player]) continue;
         
-        if(game_comm(game, curr_player, SRRQ_GAME_STATE, game, sizeof(game_t *)) != COMM_OK) continue;
-        player_trade_cards(game,curr_player);
+        //if(game_comm(game, curr_player, SRRQ_GAME_STATE, game, sizeof(game_t *)) != COMM_OK) continue;
         game->players[curr_player]->state = PL_PLAYING_WAITING;
+        player_trade_cards(game,curr_player);
     }
+
+    game_send_all(game, SRRQ_GAME_STATE, game, sizeof(game_t *));
 
     // first player: left-to-right, who has 3 in hand starts first. if no 3, then 4 etc...
     j=3;
@@ -284,7 +306,7 @@ void game_loop(game_t *game)
     // game start
     game->state = GM_PLAYING;
 
-    for(;; curr_player++, curr_player %= MAX_PLAYERS)
+    for(; game_playing_count(game) > 1 ; curr_player++, curr_player %= MAX_PLAYERS)
     {
         if(!game->players[curr_player]) continue;
         if(game->players[curr_player]->state == PL_DONE) 
@@ -315,12 +337,18 @@ void game_loop(game_t *game)
 
         // wait till player plays valid card
         legal_check: 
+        j = reason = player_plays_from(player); // load to reason for later cache
+        game_send_all(game, SRRQ_WRITE, "Waiting for player to play", strlen("Waiting for player to play"));
         if(game_comm(game, curr_player, SRRQ_GIMME_CARD, &j, sizeof(int)) != COMM_OK) goto gloop_end;   // player might have disconnected
         //j: LSB: card, other bytes: count
         card = (char)j;
         j >>= 8;
 
-        if(player_plays_from(player) == PL_PILE_F_DWN) card = player->face_down[card];
+        if(reason == PL_PILE_F_DWN) // pl sent idx of card in face-down pile
+        {
+            card = player->face_down[card];
+            j=1;
+        }
         if((reason=game_check_illegal(game, player, card,j)))
         {
             if(reason==1) // player chose bad card
@@ -377,6 +405,16 @@ void game_loop(game_t *game)
         player->state = PL_PLAYING_WAITING;
         gloop_end: ;
     }
+
+    for(j=0; j<MAX_PLAYERS; j++)
+    {
+        if(game->players[j] && game->players[j]->state != PL_DONE)
+        {
+            game_comm(game, j, SRRQ_WRITE, "LOSER", strlen("LOSER"));
+            game->players[j]->state = PL_DONE;
+            break;
+        }
+    }
 }
 
 comm_flag_t flag_map[] = {
@@ -390,6 +428,7 @@ comm_flag_t flag_map[] = {
 comm_flag_t game_comm(game_t *game, int pl_idx, server_request_t request, void *data, int dlen)
 {
     comm_flag_t ret;
+    if(!game->players[pl_idx]) return COMM_DIS;
     ret = game->players[pl_idx]->comm_if->send_request(game->players[pl_idx]->comm_if->cd, request, data, dlen);
     ret = flag_map[ret];
     /*
@@ -422,6 +461,7 @@ void *game_thread(void *arg)
     if(!game)
     {
         //log error
+        free(s);
         pthread_exit(NULL);
     }
     game->state = GM_LOBBY;
@@ -464,8 +504,9 @@ void *game_thread(void *arg)
         for(int i=0; i<MAX_PLAYERS; i++)
         {
             if(!game->players[i]) continue;
-            *s = game->players[i]->comm_if->send_request(game->players[i]->comm_if->cd, SRRQ_WRITE, "The lobby owner has quit.");
-            if(*s != COMM_QUIT || *s != COMM_DIS) queue_push(game->players[i], Q_quiter);
+            game_comm(game,i,SRRQ_WRITE, "The lobby owner has quit.", strlen("The lobby owner has quit."));
+            if(game->players[i])
+                quitter_push(game->players[i]);
         }
         free(s);
         queue_push(&game->id,Q_game_del);

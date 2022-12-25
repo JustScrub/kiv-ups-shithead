@@ -15,6 +15,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <time.h>
+#include <stdint.h>
 
 #include <signal.h>
 
@@ -97,7 +98,7 @@ player_comm_if_t shit_if = {
 void *mm_player_thread(void *arg)
 {
     pthread_detach(pthread_self());
-    int i; long choice; int idx;
+    int i; int64_t choice; int idx;
     game_t **lobbies = malloc(sizeof(game_t *)); // just to free it in the first mm_win pass
     player_t *pl = (player_t *)arg;
     comm_flag_t ret;
@@ -123,7 +124,7 @@ void *mm_player_thread(void *arg)
     if(ret != COMM_OK) goto player_exit;
     // Timeout -> choice = -1
     if(choice<0) goto mm_win;
-    if(choice>MAX_GAMES) goto recon_handle;
+    if((uint64_t)choice>MAX_GAMES) goto recon_handle;
     if(choice>i) goto mm_win; // lobby_cnt < choice < MAX_GAMES
     // 0 <= choice <= i <= MAX_GAMES
 
@@ -148,7 +149,14 @@ void *mm_player_thread(void *arg)
         pthread_exit(NULL);
     }
 
-    for(choice=0;games[choice];choice++) ;
+    for(choice=0;choice < MAX_GAMES && games[choice];choice++) ;
+    if(choice == MAX_GAMES)
+    {
+        ret = pl->comm_if->send_request(pl->comm_if->cd, SRRQ_WRITE, "Sorry, no more games available. Choose again.", strlen("Sorry, no more games available. Choose again."));
+        pthread_mutex_unlock(&gm_mutex);
+        if(ret != COMM_OK) goto player_exit;
+        goto mm_win;
+    }
     games[choice] = calloc(1,sizeof(game_t));
     game_create(pl, games[choice]);
     pthread_create(NULL,NULL,game_thread,lobbies[choice]);

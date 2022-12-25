@@ -46,7 +46,7 @@ RQFN(LOBBY_START);
 RQFN(TRADE_NOW);
 /** @param data input: player nick, output: none*/
 RQFN(ON_TURN);
-/** @param data input: none, output: card,count*/
+/** @param data input: 1 or 0, whether plays from f-d, output: card,count*/
 RQFN(GIMME_CARD);
 /** @param data input: game *, output: none*/
 RQFN(GAME_STATE);

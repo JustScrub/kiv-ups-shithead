@@ -40,6 +40,7 @@ bool game_add_player(game_t *game,player_t *pl);
  * @return int 
  */
 int game_player_count(game_t *game);
+int game_playing_count(game_t *game);
 void game_delete(game_t *game);
 void game_init(game_t *game);
 void game_loop(game_t *game);
@@ -109,7 +110,7 @@ bool game_check_burn_pile(game_t *game);
  * @param data data to send or receive
  * @return comm_flag_t
  */
-comm_flag_t game_comm(game_t *game, int pl_idx, server_request_t request, void *data);
+comm_flag_t game_comm(game_t *game, int pl_idx, server_request_t request, void *data, int dlen);
 
 void game_send_all(game_t *game, server_request_t request, void *data);
 
