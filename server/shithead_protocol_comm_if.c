@@ -115,7 +115,9 @@ comm_flag_t shit_req_handle(int cd,short rq_bfield, void *data)
 
 comm_flag_t ack_handle(int cd, char *bfr)
 {
+    bzero(bfr, BFR_LEN);
     int ret = read(cd, bfr, ACK_STRLEN);
+    printD("ack_handle: bfr=%s, ret=%d\n", bfr,ret);
     if(ret < 0) return COMM_TO; //error
     if(ret == 0) return COMM_DIS;
     if(ret < ACK_STRLEN) return COMM_TO;
@@ -129,12 +131,14 @@ comm_flag_t send_MAIN_MENU(int cd, char *bfr, void *nick_bfr)
     int ret = *(int *)nick_bfr;
     sprintf(bfr, "MAIN MENU^%d^%d\x0A", ret, NIC_LEN);
     ret = write(cd, bfr, strlen(bfr));
+    printD("send_MAIN_MENU write: bfr=%s,ret=%d\n", bfr, ret);
     if(ret < 0) return COMM_TO;
     
     ret = ack_handle(cd, bfr);
     if(ret != COMM_OK) return ret;
 
     ret = read(cd, bfr, BFR_LEN); 
+    printD("send_MAIN_MENU read: bfr=%s,ret=%d\n", bfr, ret);
     to_dis_handle(ret);
     quit_handle(bfr);
     format_check(bfr, "NICK^");
@@ -142,7 +146,7 @@ comm_flag_t send_MAIN_MENU(int cd, char *bfr, void *nick_bfr)
     char nlen[NIC_LEN+3] = {0}; // +3 for "XX^" where XX is the length of the nick
     consume_proto_part(&bfr, nlen); // nlen contains the length of the nick
     bfr++; // past the delimiter
-    ret = strtol(nlen, NULL, 10);
+    ret = strtoul(nlen, NULL, 10);
     if(strlen(bfr) != ret) return COMM_BS;
 
     strncpy((char *)nick_bfr, bfr, ret);
@@ -227,6 +231,7 @@ comm_flag_t send_MM_CHOICE(int cd, char *bfr, void *data)
     if(ret != COMM_OK) return ret;
 
     ret = read(cd, bfr, BFR_LEN);
+    printD("send_MM_CHOICE read: bfr=%s,ret=%d\n", bfr, ret);
     if(ret < 0) // Timeout OK with this request
     {
         *(int64_t*)data = -1;
@@ -260,11 +265,19 @@ comm_flag_t send_MM_CHOICE(int cd, char *bfr, void *data)
 
         consume_proto_part(&bfr, tmp); // tmp=player_id
         rc->id = strtol(tmp, NULL, 10);
+        if(rc->id <= 0){
+            free(rc);
+            return COMM_BS;
+        };
         bfr++; // past the delimiter
         bzero(tmp, NIC_LEN);
 
         consume_proto_part(&bfr, tmp); // tmp=game_id; *bfr should be \0
         rc->gid = strtol(tmp, NULL, 10);
+        if(rc->gid <= 0){
+            free(rc);
+            return COMM_BS;
+        };
 
         *(recon_cache_t**)data = rc;
         return COMM_OK;
@@ -291,9 +304,9 @@ comm_flag_t send_GIMME_CARD(int cd, char *bfr, void *data)
     ret = *bfr++ - 0x30;
 
     if(*(int*)data) // plays from face-down => read idx of card, not card itself
-        if(ret < 0 || ret > 2) return COMM_BS;
+       { if(ret < 0 || ret > 2) return COMM_BS; }
     else
-        if(!card_is_valid(ret)) return COMM_BS;
+       { if(!card_is_valid(ret)) return COMM_BS; }
 
     if(*bfr != '^') return COMM_BS;
     *(int*)data = ret;
@@ -336,21 +349,16 @@ comm_flag_t send_LOBBY_STATE(int cd, char *bfr, void *data)
 
 comm_flag_t send_LOBBIES(int cd, char *bfr, void *data)
 {
-    game_t **g = (game_t**)data;
-    int cnt;
+    int *g = (int *)data;
+    //int cnt;
     int len = sprintf(bfr, "LOBBIES");
-    for(;*g;g++)
+    for(;*g;g+=2)
     {
-        cnt = 0;
-        for(int i=0; i<MAX_PLAYERS; i++)
-        {
-            if(!(*g)->players[i]) continue;
-            cnt++;
-        }
-        len += snprintf(bfr+len,BFR_LEN-len, "^%d:%d",(*g)->id, cnt);
+        len += snprintf(bfr+len,BFR_LEN-len, "^%d:%d",*g, *(g+1));
     }
     strncat(bfr, "\x0A", 2);
     int ret = write(cd, bfr, strlen(bfr));
+    printD("send_LOBBIES: %s\n", bfr);
     if(ret < 0) return COMM_TO;
     if(ret < strlen(bfr)) return COMM_TO;
 
@@ -413,7 +421,7 @@ comm_flag_t send_GAME_STATE(int cd, char *bfr, void *data)
     return ack_handle(cd, bfr);
 }
 
-
+/*
 card_t shit_read_card(int cd, int *cnt)
 {
     card_t c;
@@ -496,4 +504,4 @@ bool shit_lobby_start(int cd)
     recv(cd,&s,sizeof(s),0);
     return s;
 }
-
+*/

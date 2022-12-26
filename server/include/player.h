@@ -25,8 +25,8 @@ typedef enum {
 
 typedef struct {
     char nick[NIC_LEN+1];
-    int id;
-    int game_id;
+    unsigned id;
+    unsigned game_id;
     player_state_t state;
     int hand[13];          /**< number of cards of value i on index i */
     card_t face_up[3];

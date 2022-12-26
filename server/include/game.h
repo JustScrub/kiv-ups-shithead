@@ -19,7 +19,7 @@ typedef enum {
 } game_state_t;
 
 typedef struct {
-    int id;
+    unsigned int id;
     game_state_t state;
     card_stack_t *draw_deck;
     card_stack_t *play_deck;

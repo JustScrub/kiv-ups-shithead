@@ -5,6 +5,13 @@
 
 typedef unsigned char card_t;
 
+#define DBG 1
+#if DBG
+#define printD(...) printf(__VA_ARGS__)
+#else
+#define printD(...)
+#endif
+
 #define J_VAL 11
 #define Q_VAL 12
 #define K_VAL 13

@@ -13,8 +13,8 @@ typedef comm_flag_t (*proto_fn)(int cd,char *rest, void *data);
 
 typedef struct {
    char nick[NIC_LEN+1];
-   int id;
-   int gid;
+   unsigned id;
+   unsigned gid;
 } recon_cache_t;
 
 comm_flag_t shit_req_send(int cd,server_request_t request, void *data, int dlen);
@@ -36,7 +36,7 @@ RQFN(MAIN_MENU);
 RQFN(MM_CHOICE);
 /** @param data input: string to send, output: none*/
 RQFN(RECON);
-/** @param data input: game** (arr of lobbies), output: none*/
+/** @param data input: int* ({id0,pl_count0...}), output: none*/
 RQFN(LOBBIES);
 /** @param data input: game *, output: none*/
 RQFN(LOBBY_STATE);

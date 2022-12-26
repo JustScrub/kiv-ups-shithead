@@ -9,7 +9,7 @@
 #include <stdbool.h>
 #include <string.h>
 
-static int gm_id = 0;
+static unsigned int gm_id = 0;
 
 void game_create(player_t *owner, game_t *out)
 {
@@ -41,7 +41,7 @@ bool game_add_player(game_t *game,player_t *pl)
     if(!game || !pl) return false;
     if(!add_allowed[game->state][pl->state]) return false;
 
-    for(;i<MAX_PLAYERS, game->players[i];i++)
+    for(;i<MAX_PLAYERS && game->players[i];i++)
         if(game->players[i]->id == pl->id) break;
 
     if(i<=MAX_PLAYERS)
@@ -279,7 +279,7 @@ void game_loop(game_t *game)
     int curr_player = 0, j, reason;
     card_t card = INVALID_CARD;
     player_t *player;
-    comm_flag_t ret;
+    //comm_flag_t ret;
 
     game_send_all(game, SRRQ_GAME_STATE, game, sizeof(game_t *));
 

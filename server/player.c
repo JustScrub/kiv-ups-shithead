@@ -87,7 +87,7 @@ bool player_play_cards(player_t *player, card_t card, int cnt, card_stack_t *pla
         {
             for(int i=0;i<3;i++)
             {
-                if(player->face_down[i] == card) player->face_down[i] == INVALID_CARD;
+                if(player->face_down[i] == card) player->face_down[i] = INVALID_CARD;
             }
         }
         

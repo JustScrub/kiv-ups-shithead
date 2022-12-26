@@ -14,7 +14,7 @@ queue_t glob_queues[] = {
     },
     [Q_game_del] = {
         .data = NULL,
-        .element_size = sizeof(int),
+        .element_size = sizeof(unsigned),
         .size = MAX_GAMES,
         .start = 0,
         .cnt = 0
