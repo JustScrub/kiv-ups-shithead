@@ -49,7 +49,7 @@ bool game_add_player(game_t *game,player_t *pl)
         game->players[i] = pl;
         pl->game_id = game->id;
         if(pl->state != PL_MAIN_MENU)
-            game_comm(game, i, SRRQ_RECON, game->state == GM_LOBBY ? "LOBBY" : "RUNNING", game->state == GM_LOBBY ? strlen("LOBBY") : strlen("RUNNING"));
+            game_comm(game, i, SRRQ_RECON, game->state == GM_LOBBY ? "L" : "R", 1);
         pl->state = game->state == GM_LOBBY? PL_LOBBY : PL_PLAYING_WAITING;
         return true;
     }
@@ -163,7 +163,7 @@ void player_trade_cards(game_t *game, int pl_idx)
         if(!card_is_valid(card)) continue;
         if(!player->hand[card-2])
         {
-            ret = game_comm(game, pl_idx, SRRQ_WRITE, "You don't have that card.", strlen("You don't have that card."));
+            ret = game_comm(game, pl_idx, SRRQ_WRITE, "You don't have that card.", sizeof("You don't have that card."));
             if(ret == COMM_QUIT || ret == COMM_DIS) return;
             break; //tries to cheat -> cannot trade
         }
@@ -325,7 +325,7 @@ void game_loop(game_t *game)
         // check if player cannot play
         if((reason=game_check_cannot_play(game, player)))
         {
-            if(game_comm(game, curr_player, SRRQ_WRITE, "You cannot play at the moment.", strlen("You cannot play at the moment.")) != COMM_OK) 
+            if(game_comm(game, curr_player, SRRQ_WRITE, "You cannot play at the moment.", sizeof("You cannot play at the moment.")) != COMM_OK) 
                 goto gloop_end;   // player might have disconnected
 
             if(reason==1) game->active_8 = false;
@@ -338,7 +338,7 @@ void game_loop(game_t *game)
         // wait till player plays valid card
         legal_check: 
         j = reason = player_plays_from(player); // load to reason for later cache
-        game_send_all(game, SRRQ_WRITE, "Waiting for player to play", strlen("Waiting for player to play"));
+        game_send_all(game, SRRQ_WRITE, "Waiting for player to play", sizeof("Waiting for player to play"));
         if(game_comm(game, curr_player, SRRQ_GIMME_CARD, &j, sizeof(int)) != COMM_OK) goto gloop_end;   // player might have disconnected
         //j: LSB: card, other bytes: count
         card = (char)j;
@@ -353,8 +353,7 @@ void game_loop(game_t *game)
         {
             if(reason==1) // player chose bad card
             {
-                //player->comm_if->send_request(cd, SRRQ_WRITE, "Illegal card(s). Choose again.");
-                if(game_comm(game, curr_player, SRRQ_WRITE, "Illegal card(s). Choose again.", strlen( "Illegal card(s). Choose again."))!=COMM_OK)
+                if(game_comm(game, curr_player, SRRQ_WRITE, "Illegal card(s). Choose again.", sizeof( "Illegal card(s). Choose again."))!=COMM_OK)
                     goto gloop_end;   // player might have disconnected
                 goto legal_check;
             }
@@ -397,7 +396,7 @@ void game_loop(game_t *game)
 
         if(!player_plays_from(player))
         {
-            game_comm(game, curr_player, SRRQ_WRITE, "Congrats, you won!", strlen("Congrats, you won!"));
+            game_comm(game, curr_player, SRRQ_WRITE, "Congrats, you won!", sizeof("Congrats, you won!"));
             continue;
         }
 
@@ -410,7 +409,7 @@ void game_loop(game_t *game)
     {
         if(game->players[j] && game->players[j]->state != PL_DONE)
         {
-            game_comm(game, j, SRRQ_WRITE, "LOSER", strlen("LOSER"));
+            game_comm(game, j, SRRQ_WRITE, "LOSER", sizeof("LOSER"));
             game->players[j]->state = PL_DONE;
             break;
         }
@@ -467,8 +466,9 @@ void *game_thread(void *arg)
         pthread_exit(NULL);
     }
     game->state = GM_LOBBY;
-    for(;;)
+    for(int lobby_idle = 0;; lobby_idle++)
     {
+        *s=0;
         // tell owner the state of the lobby
         ret = game_comm(game, 0, SRRQ_LOBBY_STATE, game, sizeof(game_t *));
         if(ret == COMM_QUIT || ret == COMM_DIS) goto lobby_owner_quit;
@@ -485,6 +485,11 @@ void *game_thread(void *arg)
         if(ret == COMM_QUIT || ret == COMM_DIS) goto lobby_owner_quit;
 
         if(*s && game_player_count(game) >= 2) break;
+        if(lobby_idle > 30)
+        {
+            //log error
+            goto lobby_owner_quit;
+        }
     }
 
     free(s);
@@ -506,7 +511,7 @@ void *game_thread(void *arg)
         for(int i=0; i<MAX_PLAYERS; i++)
         {
             if(!game->players[i]) continue;
-            game_comm(game,i,SRRQ_WRITE, "The lobby owner has quit.", strlen("The lobby owner has quit."));
+            game_comm(game,i,SRRQ_WRITE, "The lobby owner has quit.", sizeof("The lobby owner has quit."));
             if(game->players[i])
                 queue_push(game->players[i], Q_quiter);
         }

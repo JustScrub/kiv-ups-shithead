@@ -4,7 +4,7 @@
 //char *cli_rqs_str[] =              {"MM CHOICE", "LOBBY", "GAME STATE", "TOP CARD", "RECON", "PING", "GAME START", "QUIT"};
 //proto_fn cli_rqs_handlers[];
 
-#define ACK_STRLEN 3
+#define ACK_STRLEN 4
 #define BFR_LEN 256
 
 #define RQ2STR(rq) [SRRQ_##rq] = #rq
@@ -22,6 +22,13 @@ char *ser_rqs_str[] = {
     RQ2STR(WRITE),
 };
 #undef RQ2STR
+
+bool cache_data[] = {
+    [SRRQ_MAIN_MENU] = true,
+    [SRRQ_GIMME_CARD] = true,
+    // rest is false
+    [SRRQ_WRITE] = false
+};
 
 #define RQ2FN(rq) [SRRQ_##rq] = send_##rq
 proto_fn bernie_sanders[] = {
@@ -59,14 +66,18 @@ void consume_proto_part(char **rest, char *next)
 
 comm_flag_t shit_req_send(int cd,server_request_t request, void *data, int dlen)
 {
-    char bfr[BFR_LEN];
+    char bfr[BFR_LEN+1];
     comm_flag_t flag;
     int TO_cnt = 0;
-    char dcpy[dlen];
-    memcpy(dcpy,data,dlen);
+    char *dcpy = NULL;
+    if(cache_data[request]) 
+    {
+        dcpy = alloca(dlen);
+        memcpy(dcpy,data,dlen);
+    }
     send:
-    memcpy(data,dcpy,dlen);
-    bzero(bfr, BFR_LEN);
+    if(cache_data[request]) memcpy(data,dcpy,dlen);
+    bzero(bfr, BFR_LEN+1);
     flag = bernie_sanders[request](cd,bfr, data);
 
     switch(flag)
@@ -109,7 +120,7 @@ comm_flag_t shit_req_handle(int cd,short rq_bfield, void *data)
 
 #define to_dis_handle(readlen) if(readlen == 0) return COMM_DIS; \
                                if(readlen < 0) return COMM_TO
-#define quit_handle(bfr) if(!strncmp(bfr, "QUIT", 4)) return COMM_QUIT
+#define quit_handle(bfr) if(!strncmp(bfr, "QUIT\x0A", 5)) return COMM_QUIT
 #define format_check(bfr, fmt) if(strncmp(bfr, fmt, strlen(fmt))) return COMM_BS; \
                                else bfr += strlen(fmt)
 
@@ -121,7 +132,7 @@ comm_flag_t ack_handle(int cd, char *bfr)
     if(ret < 0) return COMM_TO; //error
     if(ret == 0) return COMM_DIS;
     if(ret < ACK_STRLEN) return COMM_TO;
-    if(strncmp(bfr, "ACK",ACK_STRLEN)) return COMM_BS;
+    if(strncmp(bfr, "ACK\x0A",ACK_STRLEN)) return COMM_BS;
     bzero(bfr, BFR_LEN);
     return COMM_OK;
 }
@@ -143,12 +154,8 @@ comm_flag_t send_MAIN_MENU(int cd, char *bfr, void *nick_bfr)
     quit_handle(bfr);
     format_check(bfr, "NICK^");
 
-    char nlen[NIC_LEN+3] = {0}; // +3 for "XX^" where XX is the length of the nick
-    consume_proto_part(&bfr, nlen); // nlen contains the length of the nick
-    bfr++; // past the delimiter
-    ret = strtoul(nlen, NULL, 10);
-    if(strlen(bfr) != ret) return COMM_BS;
-
+    ret = strnlen(bfr, NIC_LEN+1); // +1 for 0x0A
+    if(ret > NIC_LEN+1 || bfr[ret] != 0x0A) return COMM_BS;
     strncpy((char *)nick_bfr, bfr, ret);
     return COMM_OK;
 }
@@ -163,12 +170,12 @@ comm_flag_t send_LOBBY_START(int cd, char *bfr, void *data)
     ret = ack_handle(cd, bfr);
     if(ret != COMM_OK) return ret;
 
-    ret = read(cd, bfr, 3);
+    ret = read(cd, bfr, 4);
     to_dis_handle(ret);
     quit_handle(bfr);
 
-    if(!strncmp(bfr, "YES", 3)) *(char*)data = 1;
-    else if(!strncmp(bfr, "NO", 2)) *(char*)data = 0;
+    if(!strncmp(bfr, "YES\x0A", 4)) *(char*)data = 1;
+    else if(!strncmp(bfr, "NO\x0A", 3)) *(char*)data = 0;
     else return COMM_BS;
 
     return COMM_OK;
@@ -188,6 +195,7 @@ comm_flag_t send_TRADE_NOW(int cd, char *bfr, void *data)
     to_dis_handle(ret);
     quit_handle(bfr);
     format_check(bfr, "TRADE^");
+    if(bfr[3] != 0x0A) return COMM_BS;
 
     for(ret = 0; ret < 3; ret++)
     {
@@ -213,6 +221,7 @@ comm_flag_t send_ON_TURN(int cd, char *bfr, void *data)
 comm_flag_t send_WRITE(int cd, char *bfr, void *data)
 {
     sprintf(bfr, "WRITE^%s\x0A", (char *)data);
+    printD("send_WRITE: bfr=%s\n", bfr);
     int ret = write(cd, bfr, strlen(bfr));
     if(ret < 0) return COMM_TO;
     if(ret < strlen(bfr)) return COMM_TO;
@@ -240,18 +249,19 @@ comm_flag_t send_MM_CHOICE(int cd, char *bfr, void *data)
     if(ret == 0) return COMM_DIS;
     quit_handle(bfr);
 
-    if(!strncmp(bfr, "LB", 2))
+    if(!strncmp(bfr, "LB^", 3))
     {
         bfr += 3; // "LB^"
-        ret = strtol(bfr, NULL, 10);
+        ret = strtol(bfr, &bfr, 10);
         if(ret < 0) return COMM_BS;
         if(ret > MAX_GAMES) return COMM_BS;
+        if(*bfr != 0x0A) return COMM_BS;
         *(int64_t*)data = ret;
         return COMM_OK;
     }
-    else if(!strncmp(bfr, "RECON", 5))
+    else if(!strncmp(bfr, "RECON^", 6))
     {
-        //in data: "RECON^nick^player_id^game_id"
+        //in data: "RECON^nick^player_id^game_id\x0A"
         //out data: recon_cache_t*
         bfr += 6; // "RECON^"
         recon_cache_t *rc = calloc(1,sizeof(recon_cache_t));
@@ -272,9 +282,9 @@ comm_flag_t send_MM_CHOICE(int cd, char *bfr, void *data)
         bfr++; // past the delimiter
         bzero(tmp, NIC_LEN);
 
-        consume_proto_part(&bfr, tmp); // tmp=game_id; *bfr should be \0
-        rc->gid = strtol(tmp, NULL, 10);
-        if(rc->gid <= 0){
+        consume_proto_part(&bfr, tmp); // tmp=game_id\x0A; *bfr should be 0
+        rc->gid = strtol(tmp, &bfr, 10);
+        if(rc->gid <= 0 || *bfr != 0x0A){
             free(rc);
             return COMM_BS;
         };
@@ -296,7 +306,7 @@ comm_flag_t send_GIMME_CARD(int cd, char *bfr, void *data)
     ret = ack_handle(cd, bfr);
     if(ret != COMM_OK) return ret;
 
-    ret = read(cd, bfr, BFR_LEN);
+    ret = read(cd, bfr, BFR_LEN); // "CARD^card^cnt\x0A"
     to_dis_handle(ret);
     quit_handle(bfr);
     format_check(bfr, "CARD^");
@@ -315,6 +325,7 @@ comm_flag_t send_GIMME_CARD(int cd, char *bfr, void *data)
     ret = strtol(bfr, &bfr, 10);
     if(ret <= 0) return COMM_BS;
     if(ret > 4*DECK_NUM) return COMM_BS;
+    if(*bfr != 0x0A) return COMM_BS;
     *(int*)data |= ret << 8;
 
     return COMM_OK;
@@ -322,7 +333,7 @@ comm_flag_t send_GIMME_CARD(int cd, char *bfr, void *data)
 
 comm_flag_t send_RECON(int cd, char *bfr, void *data)
 {
-    sprintf(bfr, "RECON^%s\x0A", (char *)data);
+    sprintf(bfr, "RECON^%c\x0A", *(char *)data);
     int ret = write(cd, bfr, strlen(bfr));
     if(ret < 0) return COMM_TO;
     if(ret < strlen(bfr)) return COMM_TO;
@@ -421,87 +432,3 @@ comm_flag_t send_GAME_STATE(int cd, char *bfr, void *data)
     return ack_handle(cd, bfr);
 }
 
-/*
-card_t shit_read_card(int cd, int *cnt)
-{
-    card_t c;
-    recv(cd, &c, sizeof(c), 0);
-    recv(cd, cnt, sizeof(int), 0);
-}
-
-void shit_rq_card(int cd)
-{
-    write(cd, "GIMME CARD", strlen("GIMME CARD"));
-}
-
-void shit_rq_trade(int cd)
-{
-    write(cd, "TRADE NOW", strlen("TRADE NOW"));
-}
-
-void shit_read_trade(int cd, int *bfr)
-{
-    // cli sends 3 bytes - the cards the player wishes to trade
-    recv(cd, bfr+0,1,0);
-    recv(cd, bfr+1,1,0);
-    recv(cd, bfr+2,1,0);
-    ((char *)bfr)[3] = INVALID_CARD;
-}
-
-void shit_write(int cd, char *str)
-{
-    write(cd, str, strlen(str));
-}
-
-void shit_tell_top(int cd, card_t c)
-{
-    write(cd, "TOP CARD", strlen("TOP CARD"));
-    write(cd, &c, sizeof(c));
-}
-
-void shit_tell_cards(int cd, int *h, card_t *f, char d_mask)
-{
-    write(cd, "YOUR CARDS", strlen("YOUR CARDS"));
-    write(cd, "HAND", strlen("HAND"));
-    for(int i=0;i<13;i++)
-    {
-        write(cd, &i, sizeof(int));
-        write(cd, h+i, sizeof(int));
-    }
-    write(cd, "FACE UP", strlen("FACE UP"));
-    for(int i=0;i<3;i++)
-    {
-        write(cd, f+i, sizeof(card_t));
-    }
-    write(cd, "FACE DOWN", strlen("FACE DOWN"));
-    write(cd, &d_mask, sizeof(char));
-}
-
-void shit_tell_lobbies(int cd, void *lobbies, int n)
-{
-    game_t *globs = (game_t *)lobbies;
-    write(cd, "LOBBIES", strlen("LOBBIES"));
-    write(cd,&n,sizeof(n));
-    for(int i=0; i<n;i++)
-    {
-        if(!(lobbies+i)) continue; // ??
-        write(cd, "LOBBY", strlen("LOBBY"));
-        write(cd, &globs[i].id, sizeof(int));
-        //write player count out of max
-    }
-}
-
-unsigned shit_mm_choice(int cd)
-{
-    unsigned choice;
-    recv(cd, &choice, sizeof(choice), 0);
-    return choice;
-}
-
-bool shit_lobby_start(int cd)
-{
-    bool s;
-    recv(cd,&s,sizeof(s),0);
-    return s;
-}
-*/

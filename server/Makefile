@@ -8,3 +8,5 @@ $(OUT):
 
 clean: 
 	rm $(OUT)
+
+rebuild: clean all
