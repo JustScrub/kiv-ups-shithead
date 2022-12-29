@@ -4,7 +4,6 @@
 //char *cli_rqs_str[] =              {"MM CHOICE", "LOBBY", "GAME STATE", "TOP CARD", "RECON", "PING", "GAME START", "QUIT"};
 //proto_fn cli_rqs_handlers[];
 
-#define ACK_STRLEN 4
 #define BFR_LEN 256
 
 #define RQ2STR(rq) [SRRQ_##rq] = #rq
@@ -126,13 +125,14 @@ comm_flag_t shit_req_handle(int cd,short rq_bfield, void *data)
 
 comm_flag_t ack_handle(int cd, char *bfr)
 {
+    // both ACKN and QUIT are 5 bytes long (including \x0A)
     bzero(bfr, BFR_LEN);
-    int ret = read(cd, bfr, ACK_STRLEN);
-    printD("ack_handle: bfr=%s, ret=%d\n", bfr,ret);
-    if(ret < 0) return COMM_TO; //error
+    int ret = read(cd, bfr, 5 );
+    printD("ack_handle: bfr=%s, len=%d\n", bfr,ret);
     if(ret == 0) return COMM_DIS;
-    if(ret < ACK_STRLEN) return COMM_TO;
-    if(strncmp(bfr, "ACK\x0A",ACK_STRLEN)) return COMM_BS;
+    if(ret != 5) return COMM_TO;
+    quit_handle(bfr);
+    if(strncmp(bfr, "ACKN\x0A",5)) return COMM_BS;
     bzero(bfr, BFR_LEN);
     return COMM_OK;
 }
@@ -155,8 +155,8 @@ comm_flag_t send_MAIN_MENU(int cd, char *bfr, void *nick_bfr)
     format_check(bfr, "NICK^");
 
     ret = strnlen(bfr, NIC_LEN+1); // +1 for 0x0A
-    if(ret > NIC_LEN+1 || bfr[ret] != 0x0A) return COMM_BS;
-    strncpy((char *)nick_bfr, bfr, ret);
+    if(ret > NIC_LEN+1 || bfr[ret-1] != 0x0A) return COMM_BS;
+    strncpy((char *)nick_bfr, bfr, ret-1);
     return COMM_OK;
 }
 
@@ -416,6 +416,7 @@ comm_flag_t send_GAME_STATE(int cd, char *bfr, void *data)
         }
         else
         {
+            (bfr+len++)[0] = ':';
             len += hmask(g->players[i], bfr+len, BFR_LEN-len);
         }
         (bfr+len++)[0] = ':';

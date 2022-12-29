@@ -5,12 +5,12 @@ Server always initiates the communication and either requests data from the clie
 
 format of communication (s = server, c = client):
   1. request/inform (s)
-  2. N/ACK (c)
+  2. ACKN (c)
   3. [reply (c)]
 
 format of messages - both requests and replies:
   1. COMMAND (capital chars, underscores in stead of spaces)
-  2. data, multiple entries delimitied by '^', also delimited from the command 
+  2. [data, multiple entries delimitied by '^', also delimited from the command]
   3. newline char (0x0A)
 
 Some requests may contain data or may be "informational" - they do not request any data (reply is then "THANKS\n").

@@ -3,6 +3,7 @@
 #include "include/player.h"
 #include "string.h"
 #include "stdlib.h"
+#include "stdio.h"
 
 queue_t glob_queues[] = {
     [Q_quiter] = {
@@ -33,6 +34,7 @@ void init_queues()
 char queue_push(void *pl, game_queues_t q)
 {
     pthread_mutex_lock(&glob_queues[q].mut);
+    printD("queue_push: %c\n", 'Q' - q*13);
     if(glob_queues[q].cnt==glob_queues[q].size) {
         pthread_mutex_unlock(&glob_queues[q].mut);
         return 0;
@@ -52,6 +54,7 @@ char queue_pop(void *elem, game_queues_t q)
         pthread_mutex_unlock(&glob_queues[q].mut);
         return 0;
     }
+    printD("queue_pop: %c\n", 'Q' - q*13);
     int pos = glob_queues[q].start * glob_queues[q].element_size;
     void *pl = ((char *)(glob_queues[q].data))+pos;
     memcpy(elem,pl,glob_queues[q].element_size);

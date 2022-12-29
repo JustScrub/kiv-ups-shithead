@@ -59,7 +59,7 @@ bool game_add_player(game_t *game,player_t *pl)
 int game_player_count(game_t *game)
 {
     int cnt = 0;
-    for(int i; i<MAX_PLAYERS;i++)
+    for(int i=0; i<MAX_PLAYERS;i++)
     {
         if(game->players[i] && game->players[i]->comm_if.conn_state)
         {
@@ -156,6 +156,7 @@ void player_trade_cards(game_t *game, int pl_idx)
     comm_flag_t ret;
     player_t *player = game->players[pl_idx];
     ret = game_comm(game, pl_idx, SRRQ_TRADE_NOW, &j, sizeof(j));
+    printD("TRADE: pl_idx=%d, comm=%d\n",pl_idx, ret);
     if(ret == COMM_QUIT || ret == COMM_DIS) return;
     for(int i=0; i<3; i++)
     {
@@ -164,7 +165,7 @@ void player_trade_cards(game_t *game, int pl_idx)
         if(!player->hand[card-2])
         {
             ret = game_comm(game, pl_idx, SRRQ_WRITE, "You don't have that card.", sizeof("You don't have that card."));
-            if(ret == COMM_QUIT || ret == COMM_DIS) return;
+            if(ret == COMM_QUIT || ret == COMM_DIS) { printD("TRADE: pl quit=%d\n",pl_idx);  return;}
             break; //tries to cheat -> cannot trade
         }
         // switching

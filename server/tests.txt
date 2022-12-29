@@ -1,0 +1,84 @@
+TRADE TEST COMPLEX:
+    disable mm_player_thread
+    code
+    {
+    game_t *gm = calloc(1, sizeof(game_t));
+    game_create(pl,gm);
+    printD("serv_acc: game_id=%d\n", gm->id);
+    pl->hand[0] = 2; pl->hand[1] = 1; pl->hand[6] = 1;
+    pl->face_up[0] = 4; pl->face_up[1] = 5; pl->face_up[2] = 6;
+    comm_flag_t ret;
+    strcpy(pl->nick, "test");
+
+    printD("serv_acc: gm_state_result=%d\n", ret=pl->comm_if.send_request(pl->comm_if.cd, SRRQ_GAME_STATE,gm, sizeof(gm)));
+    if(ret != COMM_OK) goto end;
+    player_trade_cards(gm,0);
+    if(pl->comm_if.conn_state != PL_CONN_UP) goto end;
+    printD("serv_acc: gm_state_result=%d\n", ret=pl->comm_if.send_request(pl->comm_if.cd, SRRQ_GAME_STATE,gm, sizeof(gm)));
+
+    end:
+    game_delete(gm);
+    close(connfd);
+    free(pl);
+    }
+
+TRADE TEST SIMPLE:
+    code {
+    int j = 0;
+    printD("serv_acc: comm_result=%d\n", pl->comm_if.send_request(pl->comm_if.cd, SRRQ_TRADE_NOW, &j, sizeof(int)));
+    printD("serv_acc: data=%d %d %d\n", ((char *)&j)[0], ((char *)&j)[1], ((char *)&j)[2]);
+    }
+
+LOBBIES TEST 0:
+    code {
+    // 4 players, 3 games | 2 lobbies, one lobby with 1 player, second with 2
+    for(int i=0; i<4; i++) {
+        players[i] = calloc(1,sizeof(player_t)); 
+        player_create(players[i]); 
+        players[i]->comm_if.conn_state = 1;
+    }
+    for(int i=0; i<3; i++) {
+        games[i] = calloc(1,sizeof(game_t)); 
+        game_create(players[i],games[i]);
+    }
+    game_add_player(games[0], players[3]);
+    (games[1])->state = GM_PLAYING;
+
+    //printD("serv_acc: pl1=%p, g1pl0=%p\n", players[0]+1, (games[1])->players[0]);
+
+    printD("serv_acc: \n\t game_0: %d:%d \n\t game_1: %d:%d \n\t game_2: %d:%d\n",
+        game_player_count(games[0]), (games[0])->state, // 2:0
+        game_player_count(games[1]), (games[1])->state, // 1:2
+        game_player_count(games[2]), (games[2])->state); // 1:0
+
+    unsigned *lobbies; int i;
+    i = get_lobby_games(&lobbies);
+    printD("serv_acc: |lobbies|=%d\n", i); // 6
+    printD("serv_acc: comm_result=%d\n", pl->comm_if.send_request(pl->comm_if.cd, SRRQ_LOBBIES, lobbies, (i)*sizeof(unsigned)));
+
+    free(lobbies);
+    game_delete(games[0]);
+    game_delete(games[1]);
+    game_delete(games[2]);
+    for(int i=0; i<4; i++) free(players[i]);
+    }
+
+LOBBY STATE TEST:
+    code {
+    games[0] = calloc(1, sizeof(game_t));
+    strcpy(pl->nick, "host");
+    game_create(pl, games[0]);
+    for(int i=0; i<MAX_PLAYERS-1; i++){
+        players[i] = calloc(1, sizeof(player_t));
+        player_create(players[i]);
+        sprintf(players[i]->nick, "player%d", i);
+        game_add_player(games[0], players[i]);
+    }
+    games[0]->players[2] = NULL;
+
+    printD("serv_acc: comm_result=%d\n", pl->comm_if.send_request(pl->comm_if.cd, SRRQ_LOBBY_STATE, games[0], sizeof(game_t)));
+
+    game_delete(games[0]);
+    for(int i=0; i<MAX_PLAYERS-1; i++) free(players[i]);
+ 
+    }

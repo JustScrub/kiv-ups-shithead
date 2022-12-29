@@ -44,6 +44,7 @@ int game_playing_count(game_t *game);
 void game_delete(game_t *game);
 void game_init(game_t *game);
 void game_loop(game_t *game);
+void player_trade_cards(game_t *game, int pl_idx);
 
 /**
  * @brief Check if the played card is illegal.

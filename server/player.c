@@ -5,6 +5,7 @@ static int pl_id = 0;
 void player_create(player_t *out)
 {
     out->id = ++pl_id;
+    memset(out->nick,0,NIC_LEN+1);
     player_clear(out);
 }
 
