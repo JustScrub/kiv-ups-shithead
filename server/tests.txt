@@ -82,3 +82,117 @@ LOBBY STATE TEST:
     for(int i=0; i<MAX_PLAYERS-1; i++) free(players[i]);
  
     }
+
+GIMME CARD TEST:
+    code{
+    strcpy(pl->nick, "test");
+    pl->hand[3] = 1;
+    pl->face_up[0] = 5;
+    pl->face_down[1] = 6;
+
+    players[0] = calloc(1, sizeof(player_t));
+    player_create(players[0]);
+    strcpy(players[0]->nick, "test2");
+    players[0]->hand[4] = 3;
+    players[0]->face_up[2] = 9;
+    players[0]->face_down[1] = J_VAL;
+
+    games[0] = calloc(1, sizeof(game_t));
+    game_create(pl,games[0]);
+    game_add_player(games[0], players[0]);
+
+    int ret, j;
+    for(int i=0; i<2; i++){
+        printD("serv_acc: comm_result=%d\n", ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_GAME_STATE, games[0], sizeof(game_t)));
+        if(ret != COMM_OK) goto end;
+        j = (player_plays_from(pl)==PL_PILE_F_DWN);
+        printD("serv_acc: play_from=%d\n", j);
+        printD("serv_acc: comm_result=%d\n", ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_GIMME_CARD, &j, sizeof(int)));
+        if(ret != COMM_OK) goto end;
+        printD("card=%d, cnt=%d\n", j&0xFF, j>>8);
+        printD("serv_acc play OK=%d\n", player_play_cards(pl, j&0xFF, j>>8, games[0]->play_deck));
+        printD("serv_acc: top card=%d\n", game_get_top_card(games[0]));
+    }
+    printD("serv_acc: comm_result=%d\n", ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_GAME_STATE, games[0], sizeof(game_t)));
+    j = 1;
+    printD("serv_acc: comm_result=%d\n", ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_GIMME_CARD, &j, sizeof(int)));
+    printD("idx=%d, cnt=%d\n", j&0xFF, j>>8);
+    j = pl->face_down[j&0xFF];
+    printD("serv_acc: card=%d, play OK=%d\n",j, player_play_cards(pl, j, 1, games[0]->play_deck));
+    printD("serv_acc: top card=%d\n", game_get_top_card(games[0]));
+
+    end:
+    game_delete(games[0]);
+    free(players[0]);
+    }
+
+QUITTER TEST:
+    mm_thread {
+
+    printD("mm_player_thread: %d\n", ((player_t *)arg)->id);
+    player_t *p = (player_t *)arg;
+    while(p->comm_if.send_request(p->comm_if.cd, SRRQ_WRITE, "oLE", 0)==COMM_OK);
+    close(p->comm_if.cd);
+    free(p);
+    return NULL;
+
+    }
+
+    code {
+
+    int ret;
+    printD("serv_acc: comm_result=%d\n", ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_WRITE, "Hola", 0));
+    if(ret == COMM_QUIT) {
+        queue_push(&pl,Q_quiter);
+        return;
+    }
+
+    }
+
+GAME DELTER TEST:
+    mm_thread {
+
+        printD("mm_player_thread: %s\n", ((player_t *)arg)->nick);
+        player_t *p = (player_t *)arg;
+        if(p->comm_if.cd){
+            p->comm_if.send_request(p->comm_if.cd, SRRQ_WRITE, "exit", 0);    
+            close(p->comm_if.cd);
+        }
+        free(p);
+        return NULL;
+    }
+
+    code {
+
+        int ret;
+        for(int i=0; i<MAX_PLAYERS*MAX_GAMES; i++)
+        {
+            players[6*i] = calloc(1, sizeof(player_t));
+            player_create(players[6*i]);
+            sprintf(players[6*i]->nick, "Player %d", players[6*i]->id);
+        }
+        players[0]->comm_if.conn_state = PL_CONN_UP;
+        players[6]->comm_if.conn_state = PL_CONN_DOWN;
+        players[12]->comm_if.conn_state = PL_CONN_UP;
+        players[5] = pl;
+
+        *(int *)pl->nick = pl->id;
+        printD("serv_acc: comm_result=%d\n", ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_MAIN_MENU, &pl->nick, 0));
+        if(ret == COMM_QUIT) {
+            for(int i=0; i<3; i++)
+                free(players[6*i]);
+            free(pl);
+            close(connfd);
+            return;
+        }
+
+        games[0] = calloc(1, sizeof(game_t));
+        game_create(pl, games[0]);
+        for(int i=0; i<3; i++)
+            game_add_player(games[0], players[6*i]);
+        printD("serv_acc: comm_result=%d\n", ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_GAME_STATE, games[0], 0));
+
+        queue_push(&(games[0]->id), Q_game_del);
+        sleep(1);
+        printD("serv_acc: dwn_pl=%p", players[6]);
+    }

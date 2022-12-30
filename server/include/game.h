@@ -46,6 +46,9 @@ void game_init(game_t *game);
 void game_loop(game_t *game);
 void player_trade_cards(game_t *game, int pl_idx);
 
+
+card_t game_get_top_card(game_t *game);
+
 /**
  * @brief Check if the played card is illegal.
  * 

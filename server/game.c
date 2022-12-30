@@ -338,14 +338,14 @@ void game_loop(game_t *game)
 
         // wait till player plays valid card
         legal_check: 
-        j = reason = player_plays_from(player); // load to reason for later cache
+        j = reason = (player_plays_from(player)==PL_PILE_F_DWN); // load to reason for later cache
         game_send_all(game, SRRQ_WRITE, "Waiting for player to play", sizeof("Waiting for player to play"));
         if(game_comm(game, curr_player, SRRQ_GIMME_CARD, &j, sizeof(int)) != COMM_OK) goto gloop_end;   // player might have disconnected
         //j: LSB: card, other bytes: count
-        card = (char)j;
+        card = (char)j&0xFF;
         j >>= 8;
 
-        if(reason == PL_PILE_F_DWN) // pl sent idx of card in face-down pile
+        if(reason) // pl sent idx of card in face-down pile
         {
             card = player->face_down[card];
             j=1;
@@ -431,14 +431,10 @@ comm_flag_t game_comm(game_t *game, int pl_idx, server_request_t request, void *
     if(!game->players[pl_idx]) return COMM_DIS;
     ret = game->players[pl_idx]->comm_if.send_request(game->players[pl_idx]->comm_if.cd, request, data, dlen);
     ret = flag_map[ret];
-    /*
-    if(send)
-    else
-        ret = game->players[pl_idx]->comm_if->handle_request(game->players[pl_idx]->comm_if->cd, state, data);
-    */
+    
     if(ret == COMM_QUIT)
     {
-        queue_push(game->players[pl_idx], Q_quiter);
+        queue_push(game->players+pl_idx, Q_quiter);
         game->players[pl_idx] = NULL;
     }
 
@@ -502,7 +498,8 @@ void *game_thread(void *arg)
     for(int i=1; i<MAX_PLAYERS; i++)
     {
         if(!game->players[i]) continue;
-        queue_push(game->players[i], Q_quiter);
+        queue_push(game->players+i, Q_quiter);
+        game->players[i] = NULL;
     }
 
     queue_push(&game->id,Q_game_del);
@@ -513,8 +510,10 @@ void *game_thread(void *arg)
         {
             if(!game->players[i]) continue;
             game_comm(game,i,SRRQ_WRITE, "The lobby owner has quit.", sizeof("The lobby owner has quit."));
-            if(game->players[i])
-                queue_push(game->players[i], Q_quiter);
+            if(game->players[i]){
+                queue_push(game->players+i, Q_quiter);
+                game->players[i] = NULL;
+            }
         }
         free(s);
         queue_push(&game->id,Q_game_del);

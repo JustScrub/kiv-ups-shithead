@@ -155,7 +155,7 @@ comm_flag_t send_MAIN_MENU(int cd, char *bfr, void *nick_bfr)
     format_check(bfr, "NICK^");
 
     ret = strnlen(bfr, NIC_LEN+1); // +1 for 0x0A
-    if(ret > NIC_LEN+1 || bfr[ret-1] != 0x0A) return COMM_BS;
+    if( ret <= NIC_MIN_LEN || ret > NIC_LEN+1 || bfr[ret-1] != 0x0A) return COMM_BS;
     strncpy((char *)nick_bfr, bfr, ret-1);
     return COMM_OK;
 }
@@ -307,12 +307,14 @@ comm_flag_t send_GIMME_CARD(int cd, char *bfr, void *data)
     if(ret != COMM_OK) return ret;
 
     ret = read(cd, bfr, BFR_LEN); // "CARD^card^cnt\x0A"
+    printD("send_GIMME_CARD read: bfr=%s,len=%d\n", bfr, ret);
     to_dis_handle(ret);
     quit_handle(bfr);
     format_check(bfr, "CARD^");
 
     ret = *bfr++ - 0x30;
 
+    printD("send_GIMME_CARD: face_down=%c\n", (*(int*)data)? 'Y':'N');
     if(*(int*)data) // plays from face-down => read idx of card, not card itself
        { if(ret < 0 || ret > 2) return COMM_BS; }
     else
@@ -420,13 +422,16 @@ comm_flag_t send_GAME_STATE(int cd, char *bfr, void *data)
             len += hmask(g->players[i], bfr+len, BFR_LEN-len);
         }
         (bfr+len++)[0] = ':';
-        len += dmask(g->players[i], bfr+len);
-        (bfr+len++)[0] = ':';
         len += fmask(g->players[i], bfr+len);
+        (bfr+len++)[0] = ':';
+        len += dmask(g->players[i], bfr+len);
  
     }
-    strncat(bfr, "\x0A", 2);
-    int ret = write(cd, bfr, strlen(bfr));
+    len += snprintf(bfr+len, BFR_LEN-len, "^%d:%d:%d\x0A", 
+                            game_get_top_card(g), 
+                            card_stack_height(g->play_deck), 
+                            card_stack_height(g->draw_deck));
+    int ret = write(cd, bfr, len);
     if(ret < 0) return COMM_TO;
     if(ret < strlen(bfr)) return COMM_TO;
 

@@ -24,5 +24,6 @@
 #define MAX_GAMES 12
 
 #define NIC_LEN 12
+#define NIC_MIN_LEN 3
 
 #endif

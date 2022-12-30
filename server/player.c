@@ -1,5 +1,6 @@
 #include "include/player.h"
 #include "string.h"
+#include <stdio.h>
 static int pl_id = 0;
 
 void player_create(player_t *out)
@@ -63,7 +64,11 @@ int player_plays_from(player_t *player)
 
 bool player_play_cards(player_t *player, card_t card, int cnt, card_stack_t *play_deck)
 {
-    if(!player_has_card(player, card, cnt)) return false;
+    printD("play cards: %s %d %d\n", player->nick, card, cnt);
+    if(!player_has_card(player, card, cnt)) {printD("play cards: does not have\n");return false;}
+    // this if is outside the for loop =>
+        // even if has 4 times the card, but 3 in hand and 1 on face up, they can play only 3 from hand
+        // and wait for the next turn to play the last one from face up
 
     int from = player_plays_from(player);
     

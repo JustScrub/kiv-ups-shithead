@@ -31,17 +31,17 @@ void init_queues()
     }
 }
 
-char queue_push(void *pl, game_queues_t q)
+char queue_push(void *elem, game_queues_t q)
 {
     pthread_mutex_lock(&glob_queues[q].mut);
-    printD("queue_push: %c\n", 'Q' - q*13);
     if(glob_queues[q].cnt==glob_queues[q].size) {
         pthread_mutex_unlock(&glob_queues[q].mut);
         return 0;
     }
     int pos = (glob_queues[q].start+glob_queues[q].cnt) % glob_queues[q].size;
     pos *= glob_queues[q].element_size;
-    memcpy(((char *)(glob_queues[q].data))+pos,pl,glob_queues[q].element_size);
+    printD("queue_push: Q=%c pos=%d\n",'Q' - q*13, pos);
+    memcpy(((char *)(glob_queues[q].data))+pos,elem,glob_queues[q].element_size);
     glob_queues[q].cnt++;
     pthread_mutex_unlock(&glob_queues[q].mut);
     return 1;
@@ -54,8 +54,8 @@ char queue_pop(void *elem, game_queues_t q)
         pthread_mutex_unlock(&glob_queues[q].mut);
         return 0;
     }
-    printD("queue_pop: %c\n", 'Q' - q*13);
     int pos = glob_queues[q].start * glob_queues[q].element_size;
+    printD("queue_pop: Q=%c pos=%d\n", 'Q' - q*13,pos);
     void *pl = ((char *)(glob_queues[q].data))+pos;
     memcpy(elem,pl,glob_queues[q].element_size);
     glob_queues[q].start = (glob_queues[q].start+1) % glob_queues[q].size;
