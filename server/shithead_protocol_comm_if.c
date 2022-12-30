@@ -1,5 +1,6 @@
 #include "shithead_protocol_comm_if.h"
 #include "include/config.h"
+#include "errno.h"
 //player_request_t cli_rqs_field[] = {PLRQ_MM_CHOICE, /*PLRQ_LOBBY,*/ PLRQ_GAME_STATE, /*PLRQ_TOP_CARD,*/ PLRQ_RECON, /*PLRQ_PING,*/ PLRQ_GAME_START, PLRQ_QUIT};
 //char *cli_rqs_str[] =              {"MM CHOICE", "LOBBY", "GAME STATE", "TOP CARD", "RECON", "PING", "GAME START", "QUIT"};
 //proto_fn cli_rqs_handlers[];
@@ -122,6 +123,8 @@ comm_flag_t shit_req_handle(int cd,short rq_bfield, void *data)
 #define quit_handle(bfr) if(!strncmp(bfr, "QUIT\x0A", 5)) return COMM_QUIT
 #define format_check(bfr, fmt) if(strncmp(bfr, fmt, strlen(fmt))) return COMM_BS; \
                                else bfr += strlen(fmt)
+#define write_check(ret)     if(ret < 0) {if(errno == EAGAIN || errno == EWOULDBLOCK) return COMM_TO; return COMM_DIS; }
+ 
 
 comm_flag_t ack_handle(int cd, char *bfr)
 {
@@ -143,7 +146,7 @@ comm_flag_t send_MAIN_MENU(int cd, char *bfr, void *nick_bfr)
     sprintf(bfr, "MAIN MENU^%d^%d\x0A", ret, NIC_LEN);
     ret = write(cd, bfr, strlen(bfr));
     printD("send_MAIN_MENU write: bfr=%s,ret=%d\n", bfr, ret);
-    if(ret < 0) return COMM_TO;
+    write_check(ret);
     
     ret = ack_handle(cd, bfr);
     if(ret != COMM_OK) return ret;
@@ -164,7 +167,7 @@ comm_flag_t send_LOBBY_START(int cd, char *bfr, void *data)
 {
     sprintf(bfr, "LOBBY START\x0A");
     int ret = write(cd, bfr, strlen(bfr));
-    if(ret < 0) return COMM_TO;
+    write_check(ret);
     if(ret < strlen(bfr)) return COMM_TO;
 
     ret = ack_handle(cd, bfr);
@@ -185,7 +188,7 @@ comm_flag_t send_TRADE_NOW(int cd, char *bfr, void *data)
 {
     sprintf(bfr, "TRADE NOW\x0A");
     int ret = write(cd, bfr, strlen(bfr));
-    if(ret < 0) return COMM_TO;
+    write_check(ret);
     if(ret < strlen(bfr)) return COMM_TO;
 
     ret = ack_handle(cd, bfr);
@@ -212,7 +215,7 @@ comm_flag_t send_ON_TURN(int cd, char *bfr, void *data)
 {
     sprintf(bfr, "ON TURN^%s\x0A", (char *)data);
     int ret = write(cd, bfr, strlen(bfr));
-    if(ret < 0) return COMM_TO;
+    write_check(ret);
     if(ret < strlen(bfr)) return COMM_TO;
 
     return ack_handle(cd, bfr);
@@ -221,9 +224,9 @@ comm_flag_t send_ON_TURN(int cd, char *bfr, void *data)
 comm_flag_t send_WRITE(int cd, char *bfr, void *data)
 {
     sprintf(bfr, "WRITE^%s\x0A", (char *)data);
-    printD("send_WRITE: bfr=%s\n", bfr);
     int ret = write(cd, bfr, strlen(bfr));
-    if(ret < 0) return COMM_TO;
+    printD("send_WRITE write: bfr=%s,ret=%d\n", bfr, ret);
+    write_check(ret);
     if(ret < strlen(bfr)) return COMM_TO;
 
     return ack_handle(cd, bfr);
@@ -233,7 +236,7 @@ comm_flag_t send_MM_CHOICE(int cd, char *bfr, void *data)
 {
     sprintf(bfr, "MM CHOICE\x0A");
     int ret = write(cd, bfr, strlen(bfr));
-    if(ret < 0) return COMM_TO;
+    write_check(ret);
     if(ret < strlen(bfr)) return COMM_TO;
 
     ret = ack_handle(cd, bfr);
@@ -300,7 +303,7 @@ comm_flag_t send_GIMME_CARD(int cd, char *bfr, void *data)
 {
     sprintf(bfr, "GIMME CARD\x0A");
     int ret = write(cd, bfr, strlen(bfr));
-    if(ret < 0) return COMM_TO;
+    write_check(ret);
     if(ret < strlen(bfr)) return COMM_TO;
 
     ret = ack_handle(cd, bfr);
@@ -337,7 +340,7 @@ comm_flag_t send_RECON(int cd, char *bfr, void *data)
 {
     sprintf(bfr, "RECON^%c\x0A", *(char *)data);
     int ret = write(cd, bfr, strlen(bfr));
-    if(ret < 0) return COMM_TO;
+    write_check(ret);
     if(ret < strlen(bfr)) return COMM_TO;
 
     return ack_handle(cd, bfr);
@@ -354,7 +357,7 @@ comm_flag_t send_LOBBY_STATE(int cd, char *bfr, void *data)
     }
     strncat(bfr, "\x0A", 2);
     int ret = write(cd, bfr, strlen(bfr));
-    if(ret < 0) return COMM_TO;
+    to_dis_handle(ret);
     if(ret < strlen(bfr)) return COMM_TO;
 
     return ack_handle(cd, bfr);
@@ -372,7 +375,7 @@ comm_flag_t send_LOBBIES(int cd, char *bfr, void *data)
     strncat(bfr, "\x0A", 2);
     int ret = write(cd, bfr, strlen(bfr));
     printD("send_LOBBIES: %s\n", bfr);
-    if(ret < 0) return COMM_TO;
+    write_check(ret);
     if(ret < strlen(bfr)) return COMM_TO;
 
     return ack_handle(cd, bfr);
@@ -407,6 +410,7 @@ int hmask(player_t *pl, char *bfr, int blen)
 comm_flag_t send_GAME_STATE(int cd, char *bfr, void *data)
 {
     game_t *g = (game_t*)data;
+    printD("send_GAME_STATE: %d\n", g->id);
     int len = sprintf(bfr, "GAME STATE");
     for(int i=0; i<MAX_PLAYERS; i++)
     {
@@ -432,7 +436,7 @@ comm_flag_t send_GAME_STATE(int cd, char *bfr, void *data)
                             card_stack_height(g->play_deck), 
                             card_stack_height(g->draw_deck));
     int ret = write(cd, bfr, len);
-    if(ret < 0) return COMM_TO;
+    write_check(ret);
     if(ret < strlen(bfr)) return COMM_TO;
 
     return ack_handle(cd, bfr);

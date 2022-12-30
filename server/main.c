@@ -378,7 +378,7 @@ void serv_accept(pthread_t *tid)
 
     //pthread_create(tid, NULL, mm_player_thread, (void *)pl);
     int ret;
-    for(int i=0; i<MAX_PLAYERS*MAX_GAMES; i++)
+    for(int i=0; i<3; i++)
     {
         players[6*i] = calloc(1, sizeof(player_t));
         player_create(players[6*i]);
@@ -391,7 +391,7 @@ void serv_accept(pthread_t *tid)
 
     *(int *)pl->nick = pl->id;
     printD("serv_acc: comm_result=%d\n", ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_MAIN_MENU, &pl->nick, 0));
-    if(ret == COMM_QUIT) {
+    if(ret != COMM_OK) {
         for(int i=0; i<3; i++)
             free(players[6*i]);
         free(pl);
@@ -422,6 +422,7 @@ int main(int argc, char **argv)
         exit(0);
     }
     //signal(SIGSEGV, sigsegv_handler);
+    signal(SIGPIPE, SIG_IGN);
 
     pthread_t tid;
 

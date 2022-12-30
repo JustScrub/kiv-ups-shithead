@@ -1,8 +1,10 @@
 from concurrent.futures import thread
 import socket
 import threading
+from enum import Enum
 from datetime import datetime
 from typing import Any, Callable, TypeVar
+from shit_handlers import *
 Shit_Game = TypeVar("Shit_Game")
 Request = str
 
@@ -23,10 +25,11 @@ class Shit_Player:
         print(f"\tFace Down: {', '.join(map(self.down_mask,self.face_down))}")
 
 class Shit_Me(Shit_Player):
-    def __init__(self,nick) -> None:
+    def __init__(self,nick,id) -> None:
         super().__init__(nick)
         self.hand = [0 for i in range(13)]
         self.play_from = "hand"
+        self.id = id
 
     card_names = ["2","3","4","5","6","7","8","9","10","J","Q","K","A"]
 
@@ -40,10 +43,21 @@ class Shit_Me(Shit_Player):
     def update_play_from(self) -> None:
         if self.hand.count(0) == 13:
             self.play_from = "face_up"
+        else: 
+            self.play_from = "hand"
+            return
+
         if self.face_up.count(0) == 3:
             self.play_from = "face_down"
+        else: 
+            self.play_from = "face_up"
+            return
+
         if self.face_down.count(0) == 3:
             self.play_from = None
+        else: 
+            self.play_from = "face_down"
+            return
 
     def play_cards(self) -> int:
         card, amount = 0,0
@@ -103,36 +117,102 @@ class Shit_Me(Shit_Player):
         self.update_play_from()
         return card,amount
 
+class Shit_State(Enum):
+    MAIN_MENU = 0
+    LOBBY = 1
+    LOBBY_OWNER = 2
+    PLAYING_WAITING = 3
+    PLAYING_ON_TURN = 4
+    PLAYING_DONE = 5
+
 class Shit_Game:
-    def __init__(self, players_cnt, packs_cnt=1):
-        self.players = {}
-        self.me = None
+    def __init__(self, me, players_cnt, packs_cnt=1):
+        self.id = -1
+        self.state = Shit_State.MAIN_MENU
+
+
+        self.players = {me.nick: me}
+        self.me = me
         self.top_card = 0
+        self.play_deck = 0
         self.draw_pile = packs_cnt*13*4 - players_cnt*9
         if self.draw_pile < 0:
             raise ValueError("Not enough cards for players")
 
     def add_player(self, player):
         self.players[player.nick] = player
-        if type(player) == Shit_Me:
-            self.me = player
-
-    def rm_player(self, nick):
-        del self.players[nick]
 
     def __getitem__(self, key):
         return self.players[key]
 
-    def print_state(self):
+    def print_state(self, serv_msg=None):
         print("Top Card:", self.top_card)
         print("Draw Pile Height:", self.draw_pile)
         for player in filter(lambda p: p.nick != self.me.nick, self.players.values()):
             player.print()
         self.me.print()
+        print(serv_msg)
 
+    def cache_player(self):
+        with open("shit_cache", "w") as f:
+            f.write(f"""
+            {self.me.nick}
+            {self.me.id}
+            {self.id}
+            """)
+
+    def get_cache(self):
+        return (self.me.nick, self.me.id, self.id)
+
+class Shit_Comm:
+    handlers = {
+        "MAIN MENU": handle_main_menu,
+        "MM CHOICE": None,
+        "RECON": None,
+        "LOBBIES": None,
+        "LOBBY STATE": None,
+        "LOBBY START": None,
+        "TRADE NOW": None,
+        "ON TURN": None,
+        "GIMME CARD": None,
+        "GAME STATE": None,
+        "WRITE": None
+    }
+
+    def __init__(self, 
+                 nick, 
+                 serv_info=("127.0.0.1", 4444),
+                 timeout=10.0, 
+                 log="shit_log"):
+        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._sock.settimeout(timeout)
+        self._sock.connect(serv_info)
+        #self._sockfile = self._sock.makefile("r")
+        nlen, pid = self.handlers["MAIN MENU"](self._sock, nick)
+
+        self.serv_nick = nick[:nlen]
+        print(nlen, pid, self.serv_nick)
+
+        self.game = Shit_Game(Shit_Me(nick, pid), 4)
+
+    def __del__(self):
+        #print("Closing socket")
+        self._sock.close()
 
 
 if __name__ == "__main__":
+    #ask for nick, max len = 12
+    nick = "A"*13
+    while len(nick) > 12:
+        nick = input("Enter your nick: ")
+
+    gm = Shit_Comm(nick)
+    del gm
+    exit()
+
+
+pass
+if __name__ == "":
     import random
     import os
     clear = lambda: os.system('clear')
@@ -159,8 +239,6 @@ if __name__ == "__main__":
         game.me.play_cards()
 
     exit()
-
-
 
 class Shit_Cache_old:
     def __init__(self) -> None:
