@@ -1,12 +1,14 @@
-from concurrent.futures import thread
 import socket
 import threading
+import os
 from enum import Enum
 from datetime import datetime
 from typing import Any, Callable, TypeVar
 from shit_handlers import *
 Shit_Game = TypeVar("Shit_Game")
 Request = str
+
+clear = lambda: os.system('clear')
 
 class Shit_Player:
     def __init__(self, nick) -> None:
@@ -121,15 +123,25 @@ class Shit_State(Enum):
     MAIN_MENU = 0
     LOBBY = 1
     LOBBY_OWNER = 2
-    PLAYING_WAITING = 3
-    PLAYING_ON_TURN = 4
-    PLAYING_DONE = 5
+    PLAYING_TRADING = 3
+    PLAYING_WAITING = 4
+    PLAYING_ON_TURN = 5
+    PLAYING_DONE = 6
+
+shit_input_format = {
+    Shit_State.MAIN_MENU: None, # number (lobby idx), "new" or "reconnect" (respond to MM CHOICE)
+    Shit_State.LOBBY: None, # no input (only LOBBY STATE)
+    Shit_State.LOBBY_OWNER: None, # "START" (respond to LOBBY START)
+    Shit_State.PLAYING_TRADING: None, # "A B C" - cards to have in face-up (respond to TRADE)
+    Shit_State.PLAYING_WAITING: None, # no input (only GAME STATE or ON TURN)
+    Shit_State.PLAYING_ON_TURN: None, # "A B" - card, amount (respond to GIMME CARD)
+    Shit_State.PLAYING_DONE: None, # no input (only GAME STATE or ON TURN)
+}
 
 class Shit_Game:
     def __init__(self, me, players_cnt, packs_cnt=1):
         self.id = -1
         self.state = Shit_State.MAIN_MENU
-
 
         self.players = {me.nick: me}
         self.me = me
@@ -146,6 +158,7 @@ class Shit_Game:
         return self.players[key]
 
     def print_state(self, serv_msg=None):
+        clear()
         print("Top Card:", self.top_card)
         print("Draw Pile Height:", self.draw_pile)
         for player in filter(lambda p: p.nick != self.me.nick, self.players.values()):
@@ -161,8 +174,12 @@ class Shit_Game:
             {self.id}
             """)
 
-    def get_cache(self):
-        return (self.me.nick, self.me.id, self.id)
+    def get_cache(self, fromfile=False):
+        if not fromfile:
+            return (self.me.nick, self.me.id, self.id)
+        with open("shit_cache", "r") as f:
+            nick, id, game_id = f.read().split()
+            return (nick, int(id), int(game_id))
 
 class Shit_Comm:
     handlers = {
@@ -176,7 +193,7 @@ class Shit_Comm:
         "ON TURN": None,
         "GIMME CARD": None,
         "GAME STATE": None,
-        "WRITE": None
+        "WRITE": handle_write
     }
 
     def __init__(self, 
@@ -184,6 +201,9 @@ class Shit_Comm:
                  serv_info=("127.0.0.1", 4444),
                  timeout=10.0, 
                  log="shit_log"):
+        self._pl_quit = False
+        self._quit_lock = threading.Lock()
+
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.settimeout(timeout)
         self._sock.connect(serv_info)
@@ -191,7 +211,7 @@ class Shit_Comm:
         nlen, pid = self.handlers["MAIN MENU"](self._sock, nick)
 
         self.serv_nick = nick[:nlen]
-        print(nlen, pid, self.serv_nick)
+        print(pid, self.serv_nick)
 
         self.game = Shit_Game(Shit_Me(nick, pid), 4)
 
@@ -199,6 +219,64 @@ class Shit_Comm:
         #print("Closing socket")
         self._sock.close()
 
+    def quit(self, val=None):
+        with self._quit_lock:
+            if val is None:
+                return self._pl_quit
+            self._pl_quit = val
+            return val
+
+    def sendall(self, msg):
+        self._sock.sendall((msg+"\x0A").encode())
+
+    def comm_loop(self):
+        inp = ""
+        ret = None
+        shit_patience = 5 
+        while shit_patience > 0:
+            with self._sock.makefile("r") as f:
+                inp = f.readline()
+            inp = inp.rstrip("\x0A").split('^')
+            #print(inp)
+
+            if inp[0] not in self.handlers.keys():
+                print("Unknown command:", inp[0])
+                shit_patience -= 1
+                continue
+
+            if self.quit():
+                self.sendall("QUIT")
+                if(self.game.state == Shit_State.MAIN_MENU):
+                    return
+                self.quit(False)
+                shit_patience = 5
+                continue
+            self.sendall("ACKN")
+
+            try:
+                ret = self.handlers[inp[0]](self.game, inp[1:])
+            except Exception as e:
+                print(e)
+                shit_patience -= 1
+                continue
+            else:
+                if ret is not None:
+                    self.sendall(ret.join("^"))
+                shit_patience = 5
+        raise Exception("Server is not responding")
+
+def quit_input(quit_setter):
+    while True:
+        try:
+            inp = input("Quit? (y/n): ")
+        except Exception:
+            #kill thread
+            return
+        else:
+            if inp == "y":
+                quit_setter(True)
+            elif inp == "n":
+                quit_setter(False)
 
 if __name__ == "__main__":
     #ask for nick, max len = 12
@@ -207,6 +285,9 @@ if __name__ == "__main__":
         nick = input("Enter your nick: ")
 
     gm = Shit_Comm(nick)
+    qinp = threading.Thread(target=quit_input, args=(gm.quit,))
+    qinp.start()
+    gm.comm_loop()
     del gm
     exit()
 
@@ -266,7 +347,7 @@ class Shit_Game_old:
         self._cache: Shit_Cache_old = None
         self._lobbies = None
 
-        self._req_handler_t.run()
+        self._req_handler_t.start()
 
     def send_request(self, data_parser: Callable[[Shit_Game, list[Any]], bool], req: Request, req_data = None) -> bool:
         if not req in Shit_Game.req_set:

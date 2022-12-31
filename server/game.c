@@ -28,10 +28,10 @@ void game_create(player_t *owner, game_t *out)
  * [GM_LOBBY][PL_MAIN_MENU] = classic add
  * other true values are for "reconnecting" players
  */
-bool add_allowed[][6] = {
+bool add_allowed[][7] = {
     [GM_LOBBY] = {[PL_MAIN_MENU] = true, [PL_LOBBY] = true },
     [GM_PREPARE] = {0},
-    [GM_PLAYING] = {[PL_PLAYING_WAITING] = true, [PL_PLAYING_ON_TURN] = true, [PL_DONE] = true},
+    [GM_PLAYING] = {[PL_PLAYING_WAITING] = true, [PL_PLAYING_ON_TURN] = true, [PL_PLAYING_TRADING] = true , [PL_DONE] = false},
     [GM_FINISHED] = {0}
 };
 
@@ -290,8 +290,9 @@ void game_loop(game_t *game)
         if(!game->players[curr_player]) continue;
         
         //if(game_comm(game, curr_player, SRRQ_GAME_STATE, game, sizeof(game_t *)) != COMM_OK) continue;
-        game->players[curr_player]->state = PL_PLAYING_WAITING;
+        game->players[curr_player]->state = PL_PLAYING_TRADING;
         player_trade_cards(game,curr_player);
+        game->players[curr_player]->state = PL_PLAYING_WAITING;
     }
 
     game_send_all(game, SRRQ_GAME_STATE, game, sizeof(game_t *));
@@ -417,20 +418,24 @@ void game_loop(game_t *game)
     }
 }
 
-comm_flag_t flag_map[] = {
-    [COMM_OK] = COMM_OK,
-    [COMM_QUIT] = COMM_QUIT,
-    [COMM_DIS] = COMM_DIS,
-    // handle timeout and bullshit as disconnect
-    [COMM_TO] = COMM_DIS,
-    [COMM_BS] = COMM_DIS,
+bool resp_can_timeout[] = {
+    [SRRQ_MAIN_MENU] = false,
+    [SRRQ_MM_CHOICE] = true,
+    [SRRQ_RECON] = false,
+    [SRRQ_LOBBIES] = false,
+    [SRRQ_LOBBY_STATE] = false,
+    [SRRQ_LOBBY_START] = true,
+    [SRRQ_TRADE_NOW] = true,
+    [SRRQ_ON_TURN] = false,
+    [SRRQ_GIMME_CARD] = true,
+    [SRRQ_GAME_STATE] = false,
+    [SRRQ_WRITE] = false
 };
 comm_flag_t game_comm(game_t *game, int pl_idx, server_request_t request, void *data, int dlen)
 {
     comm_flag_t ret;
     if(!game->players[pl_idx]) return COMM_DIS;
     ret = game->players[pl_idx]->comm_if.send_request(game->players[pl_idx]->comm_if.cd, request, data, dlen);
-    ret = flag_map[ret];
     
     if(ret == COMM_QUIT)
     {
@@ -438,11 +443,18 @@ comm_flag_t game_comm(game_t *game, int pl_idx, server_request_t request, void *
         game->players[pl_idx] = NULL;
     }
 
-    if(ret == COMM_DIS)
+    if(ret == COMM_TO)
+    {
+        if(resp_can_timeout[request]) return COMM_TO; // user might not have responded in time
+        else ret = COMM_DIS;
+    }
+
+    if(ret == COMM_DIS || ret == COMM_BS)
     {
         game->players[pl_idx]->comm_if.conn_state = PL_CONN_DOWN;
         //quitter_push(game->players[pl_idx]);
         game->players[pl_idx] = NULL;
+        return COMM_DIS;
     }
 
     return ret;

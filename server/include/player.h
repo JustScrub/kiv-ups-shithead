@@ -18,6 +18,7 @@ typedef enum {
     PL_MAIN_MENU = 0,  /**< Player in main menu. (Can join/create a lobby) */
     PL_LOBBY,          /**< Player in lobby.*/
     PL_LOBBY_OWNER,          /**< Player in lobby. Can start game */
+    PL_PLAYING_TRADING,
     PL_PLAYING_ON_TURN,        /**< Player is in play and it is their turn. */
     PL_PLAYING_WAITING,        /**< Player is in play, but not their turn. */
     PL_DONE            /**< Player won the game.*/

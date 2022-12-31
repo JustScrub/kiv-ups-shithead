@@ -103,13 +103,30 @@ char check_recon_cache(recon_cache_t *cache, int *i)
 void *mm_player_thread(void *arg)
 {
     pthread_detach(pthread_self());
-    printD("mm_player_thread: %s\n", ((player_t *)arg)->nick);
     player_t *p = (player_t *)arg;
-    if(p->comm_if.cd){
-        p->comm_if.send_request(p->comm_if.cd, SRRQ_WRITE, "exit", 0);    
+    comm_flag_t re;
+    *(int *)p->nick = p->id;
+    re = p->comm_if.send_request(p->comm_if.cd, SRRQ_MAIN_MENU, p->nick, sizeof(int));
+    if(re != COMM_OK)
+    {
+        printD("mm_player_thread: exit=%d, reason=%d\n",p->id,re);
         close(p->comm_if.cd);
+        free(p);
+        return NULL;
     }
-    free(p);
+    while(1)
+    {
+        re = p->comm_if.send_request(p->comm_if.cd, SRRQ_WRITE, "Hola", 5);
+        if(re != COMM_OK)
+        {
+            printD("mm_player_thread: exit=%d, reason=%d\n",p->id,re);
+            close(p->comm_if.cd);
+            free(p);
+            return NULL;
+        }
+        sleep(1);
+    }
+
     return NULL;
 
     int i; int64_t choice; int idx;
@@ -136,12 +153,12 @@ void *mm_player_thread(void *arg)
     ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_LOBBIES, lobbies, (i)*sizeof(unsigned)); // todo: pass &lobby to SRRQ_LOBBIES
     if(ret != COMM_OK) goto player_exit;
     ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_MM_CHOICE, &choice, sizeof(int64_t));
-    if(ret != COMM_OK) goto player_exit;
+    if(ret != COMM_TO && ret != COMM_OK) goto player_exit;
     // Timeout -> choice = -1
-    if(choice<0) goto mm_win;
+    if(choice<0 || ret == COMM_TO) goto mm_win;
     if((uint64_t)choice>MAX_GAMES) goto recon_handle;
-    if(choice>i) goto mm_win; // lobby_cnt < choice < MAX_GAMES
-    // 0 <= choice <= i <= MAX_GAMES
+    if(choice>i) goto mm_win; // lobby_cnt < choice <= MAX_GAMES
+    // 0 <= choice <= lobby_cnt <= MAX_GAMES
 
     pthread_mutex_lock(&gm_mutex);
     if(choice){
@@ -376,41 +393,9 @@ void serv_accept(pthread_t *tid)
     pl->comm_if.cd = connfd;
     printD("serv_acc: id=%d\n", pl->id);
 
-    //pthread_create(tid, NULL, mm_player_thread, (void *)pl);
-    int ret;
-    for(int i=0; i<3; i++)
-    {
-        players[6*i] = calloc(1, sizeof(player_t));
-        player_create(players[6*i]);
-        sprintf(players[6*i]->nick, "Player %d", players[6*i]->id);
-    }
-    players[0]->comm_if.conn_state = PL_CONN_UP;
-    players[6]->comm_if.conn_state = PL_CONN_DOWN;
-    players[12]->comm_if.conn_state = PL_CONN_UP;
-    players[5] = pl;
-
-    *(int *)pl->nick = pl->id;
-    printD("serv_acc: comm_result=%d\n", ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_MAIN_MENU, &pl->nick, 0));
-    if(ret != COMM_OK) {
-        for(int i=0; i<3; i++)
-            free(players[6*i]);
-        free(pl);
-        close(connfd);
-        return;
-    }
-
-    games[0] = calloc(1, sizeof(game_t));
-    game_create(pl, games[0]);
-    for(int i=0; i<3; i++)
-        game_add_player(games[0], players[6*i]);
-    printD("serv_acc: comm_result=%d\n", ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_GAME_STATE, games[0], 0));
-
-    queue_push(&(games[0]->id), Q_game_del);
-    sleep(1);
-    printD("serv_acc: dwn_pl=%p", players[6]);
-
-//    close(connfd);
-//    free(pl);
+    pthread_create(tid, NULL, mm_player_thread, (void *)pl);
+    //close(connfd);
+    //free(pl);
 }
 
 int main(int argc, char **argv)

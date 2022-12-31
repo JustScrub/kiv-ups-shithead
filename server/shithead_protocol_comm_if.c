@@ -247,14 +247,14 @@ comm_flag_t send_MM_CHOICE(int cd, char *bfr, void *data)
     if(ret < 0) // Timeout OK with this request
     {
         *(int64_t*)data = -1;
-        return COMM_OK;
+        return COMM_TO;
     }
     if(ret == 0) return COMM_DIS;
     quit_handle(bfr);
 
-    if(!strncmp(bfr, "LB^", 3))
+    if(!strncmp(bfr, "LOBBY^", 6))
     {
-        bfr += 3; // "LB^"
+        bfr += 6; // "LOBBY^"
         ret = strtol(bfr, &bfr, 10);
         if(ret < 0) return COMM_BS;
         if(ret > MAX_GAMES) return COMM_BS;
