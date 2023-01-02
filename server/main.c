@@ -30,10 +30,6 @@ void sigsegv_handler(int signum)
         exit(0);
 }
 
-struct timeval timeout = {
-    .tv_sec=10
-};
-
 player_t *players[MAX_PLAYERS*MAX_GAMES] = {0};
 game_t *games[MAX_GAMES] = {0};
 pthread_mutex_t pl_mutex = PTHREAD_MUTEX_INITIALIZER , gm_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -366,6 +362,12 @@ void start_serv(char *ip_s, char *port_s)
 
     serv_fd = sockfd;
 }
+
+#define TO_SEC 24
+struct timeval timeout = {
+    .tv_sec=TO_SEC,
+};
+
 
 player_comm_if_t shit_if = {
     .send_request = shit_req_send,

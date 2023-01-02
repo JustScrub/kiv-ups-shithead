@@ -1,6 +1,8 @@
 import socket
 import threading
 import os
+import sys
+import platform
 from enum import Enum
 from datetime import datetime
 from typing import Any, Callable, TypeVar
@@ -8,7 +10,11 @@ from shit_handlers import *
 Shit_Game = TypeVar("Shit_Game")
 Request = str
 
-clear = lambda: os.system('clear')
+clear = None
+if platform.system() == "Linux":
+    clear = lambda: os.system('clear')
+else:
+    clear = lambda: os.system('cls')
 
 class Shit_Player:
     def __init__(self, nick) -> None:
@@ -17,8 +23,8 @@ class Shit_Player:
         self.face_up = (0,0,0)
         self.face_down = (1,1,1)
 
-        self.uncard = lambda c: 'X' if c==0 else str(c)
-        self.down_mask = lambda c: 'X' if c==0 else 'O'
+    uncard = staticmethod(lambda c: 'X' if c==0 else str(c))
+    down_mask = staticmethod(lambda c: 'X' if c==0 else 'O')
 
     def print(self):
         print(self.nick, ":")
@@ -159,12 +165,12 @@ class Shit_Game:
 
     def print_state(self, serv_msg=None):
         clear()
-        print("Top Card:", self.top_card)
+        print(f"Top Card: {Shit_Player.uncard(self.top_card)} ({self.play_deck})")
         print("Draw Pile Height:", self.draw_pile)
         for player in filter(lambda p: p.nick != self.me.nick, self.players.values()):
             player.print()
         self.me.print()
-        print(serv_msg)
+        print(serv_msg or "")
 
     def cache_player(self):
         with open("shit_cache", "w") as f:
@@ -199,7 +205,7 @@ class Shit_Comm:
     def __init__(self, 
                  nick, 
                  serv_info=("127.0.0.1", 4444),
-                 timeout=10.0, 
+                 timeout=22.0, 
                  log="shit_log"):
         self._pl_quit = False
         self._quit_lock = threading.Lock()
@@ -261,7 +267,7 @@ class Shit_Comm:
                 continue
             else:
                 if ret is not None:
-                    self.sendall(ret.join("^"))
+                    self.sendall("^".join(ret))
                 shit_patience = 5
         raise Exception("Server is not responding")
 

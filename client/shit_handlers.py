@@ -24,3 +24,4 @@ def handle_main_menu(sock: socket, nick):
 def handle_write( game, inp):
     game.print_state(inp[0])
     return None
+

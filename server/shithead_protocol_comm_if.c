@@ -64,6 +64,8 @@ void consume_proto_part(char **rest, char *next)
     *(next++) = *((*rest)++);
 }
 
+// retry count (actual cnt is +1)
+#define RETRY_CNT 3
 comm_flag_t shit_req_send(int cd,server_request_t request, void *data, int dlen)
 {
     char bfr[BFR_LEN+1];
@@ -84,7 +86,7 @@ comm_flag_t shit_req_send(int cd,server_request_t request, void *data, int dlen)
     {
         case COMM_TO:
         case COMM_BS:
-            if(TO_cnt++ > 3) { close(cd); break; }
+            if(TO_cnt++ > RETRY_CNT) { close(cd); break; }
             goto send;
         case COMM_DIS:
             close(cd);

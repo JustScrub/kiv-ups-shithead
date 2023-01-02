@@ -437,6 +437,8 @@ comm_flag_t game_comm(game_t *game, int pl_idx, server_request_t request, void *
     if(!game->players[pl_idx]) return COMM_DIS;
     ret = game->players[pl_idx]->comm_if.send_request(game->players[pl_idx]->comm_if.cd, request, data, dlen);
     
+    if(ret == COMM_OK) return COMM_OK;
+
     if(ret == COMM_QUIT)
     {
         queue_push(game->players+pl_idx, Q_quiter);
@@ -492,6 +494,7 @@ void *game_thread(void *arg)
         // wait for owner to start the game
         game_comm(game, 0, SRRQ_LOBBY_START, s, 1);
         if(ret == COMM_QUIT || ret == COMM_DIS) goto lobby_owner_quit;
+        if(ret == COMM_TO) *s=0;
 
         if(*s && game_player_count(game) >= 2) break;
         if(lobby_idle > 30)
