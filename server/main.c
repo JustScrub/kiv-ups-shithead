@@ -36,7 +36,7 @@ pthread_mutex_t pl_mutex = PTHREAD_MUTEX_INITIALIZER , gm_mutex = PTHREAD_MUTEX_
 
 int serv_fd;
 
-int get_lobby_games(unsigned **lobbies)
+int get_lobby_games(lobby_info_t **lobbies)
 {
     pthread_mutex_lock(&gm_mutex);
 
@@ -49,21 +49,23 @@ int get_lobby_games(unsigned **lobbies)
         }
     }
 
-    *lobbies = calloc(cnt+1,2*sizeof(int));
+    *lobbies = calloc(cnt+1,sizeof(lobby_info_t));
     if(!*lobbies) {pthread_mutex_unlock(&gm_mutex); return -1;}
-    if(!cnt) {pthread_mutex_unlock(&gm_mutex); return 2;}
+    if(!cnt) {pthread_mutex_unlock(&gm_mutex); return 1;}
     cnt=0;
 
     for(int i=0; i<MAX_GAMES; i++)
     {
         if(!games[i] || games[i]->state!=GM_LOBBY) continue;
-        (*lobbies)[cnt++] = games[i]->id;
-        (*lobbies)[cnt++] = (unsigned)game_player_count(games[i]);
+        (*lobbies)[cnt].pl_cnt = game_player_count(games[i]);
+        strncpy((*lobbies)[cnt].owner_nick, games[i]->players[0], NIC_LEN);
+        (*lobbies)[cnt].gid = games[i]->id;
+        cnt++;
     }
 
     pthread_mutex_unlock(&gm_mutex);
 
-    return cnt+2;
+    return cnt+1;
 }
 
 char check_recon_cache(recon_cache_t *cache, int *i)
@@ -99,34 +101,8 @@ char check_recon_cache(recon_cache_t *cache, int *i)
 void *mm_player_thread(void *arg)
 {
     pthread_detach(pthread_self());
-    player_t *p = (player_t *)arg;
-    comm_flag_t re;
-    *(int *)p->nick = p->id;
-    re = p->comm_if.send_request(p->comm_if.cd, SRRQ_MAIN_MENU, p->nick, sizeof(int));
-    if(re != COMM_OK)
-    {
-        printD("mm_player_thread: exit=%d, reason=%d\n",p->id,re);
-        close(p->comm_if.cd);
-        free(p);
-        return NULL;
-    }
-    while(1)
-    {
-        re = p->comm_if.send_request(p->comm_if.cd, SRRQ_WRITE, "Hola", 5);
-        if(re != COMM_OK)
-        {
-            printD("mm_player_thread: exit=%d, reason=%d\n",p->id,re);
-            close(p->comm_if.cd);
-            free(p);
-            return NULL;
-        }
-        sleep(1);
-    }
-
-    return NULL;
-
     int i; int64_t choice; int idx;
-    unsigned *lobbies = malloc(sizeof(unsigned)); // just to free it in the first mm_win pass
+    lobby_info_t *lobbies = malloc(sizeof(lobby_info_t)); // just to free it in the first mm_win pass
     player_t *pl = (player_t *)arg;
     comm_flag_t ret; pthread_t tid;
 
@@ -146,12 +122,12 @@ void *mm_player_thread(void *arg)
     free(lobbies);
     if((i = get_lobby_games(&lobbies)) < 0) goto mm_win;
 
-    ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_LOBBIES, lobbies, (i)*sizeof(unsigned)); // todo: pass &lobby to SRRQ_LOBBIES
+    ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_LOBBIES, lobbies, (i)*sizeof(lobby_info_t));
     if(ret != COMM_OK) goto player_exit;
     ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_MM_CHOICE, &choice, sizeof(int64_t));
-    if(ret != COMM_TO && ret != COMM_OK) goto player_exit;
-    // Timeout -> choice = -1
-    if(choice<0 || ret == COMM_TO) goto mm_win;
+    if(ret != COMM_IGN && ret != COMM_OK) goto player_exit;
+    // Ignore -> choice = -1
+    if(/*choice<0 ||*/ ret == COMM_IGN) goto mm_win;
     if((uint64_t)choice>MAX_GAMES) goto recon_handle;
     if(choice>i) goto mm_win; // lobby_cnt < choice <= MAX_GAMES
     // 0 <= choice <= lobby_cnt <= MAX_GAMES
@@ -160,7 +136,7 @@ void *mm_player_thread(void *arg)
     if(choice){
         choice--;
         for(i=0;i<MAX_GAMES;i++){
-            if(games[i] && games[i]->id == lobbies[choice*2]){
+            if(games[i] && games[i]->id == lobbies[choice].gid){
                 choice = i;
                 break;
             }
@@ -238,7 +214,8 @@ void *mm_player_thread(void *arg)
             goto mm_win;
         }
         players[reconidx]->comm_if.cd = pl->comm_if.cd;
-        players[reconidx]->comm_if.conn_state = PL_CONN_UP;
+        players[reconidx]->id = pl->id;
+        //players[reconidx]->comm_if.conn_state = PL_CONN_UP;
         if(!game_add_player(games[choice],players[reconidx]))
         {
             ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_RECON, "I", 1);
@@ -256,7 +233,11 @@ void *mm_player_thread(void *arg)
 
     player_exit:
         printD("mm player_exit: ret=%d\n", ret);
-        free(players[idx]); players[idx] = NULL;
+        //free(players[idx]); players[idx] = NULL;
+        pthread_mutex_lock(&pl_mutex);
+        players[idx] = NULL;
+        pthread_mutex_unlock(&pl_mutex);
+        free(pl);
         free(lobbies);
         pthread_exit(NULL);
 }
@@ -267,12 +248,24 @@ void *player_quitter(void *arg) {
     while(1) {
         if(queue_pop(&pl,Q_quiter)) {
             printD("player_quitter: quit=%d\n", pl->id);
-            if(pl->comm_if.conn_state != PL_CONN_UP) break;
+            if(pl->comm_if.conn_state == PL_CONN_DOWN) {  // free disconnected players in lobby
+                if(pl->state != PL_LOBBY && pl->state != PL_LOBBY_OWNER) continue;
+
+                pthread_mutex_lock(&pl_mutex);
+                for(int i=0; i<MAX_PLAYERS*MAX_GAMES; i++)
+                    if(players[i] && players[i]->id == pl->id)
+                    {
+                        free(players[i]); players[i] = NULL;
+                        break;
+                    }
+                pthread_mutex_unlock(&pl_mutex);
+                continue;
+            }
             player_clear(pl);
             pthread_create(&tid,NULL,mm_player_thread,pl);
             pl = NULL;
         }
-        sleep(1);
+        else sleep(1);
     }
     return arg;
 }
@@ -305,7 +298,7 @@ void *game_deleter(void *arg)
                 }
             pthread_mutex_unlock(&gm_mutex);
         }
-        sleep(1);
+        else sleep(1);
     }
     return arg;
 }
@@ -338,10 +331,6 @@ void start_serv(char *ip_s, char *port_s)
         exit(0);
     }
     int port = atoi(port_s);
-    if(port < 1024 || port > 65535) {
-        printf("Invalid port number\n");
-        exit(0);
-    }
     servaddr.sin_port = htons((uint16_t)port);
    
     // Binding newly created socket to given IP and verification
@@ -405,7 +394,6 @@ int main(int argc, char **argv)
     if(argc != 3) {
         printf("Usage: %s <ip> <port>\n", argv[0]);
         printf("IP must be in IPv4 format as specified by inet_aton(3).\n");
-        printf("Port must be in range 1024-65535\n");
         exit(0);
     }
     //signal(SIGSEGV, sigsegv_handler);

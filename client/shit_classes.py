@@ -1,14 +1,6 @@
-import socket
-import threading
 import os
-import sys
 import platform
 from enum import Enum
-from datetime import datetime
-from typing import Any, Callable, TypeVar
-from shit_handlers import *
-Shit_Game = TypeVar("Shit_Game")
-Request = str
 
 clear = None
 if platform.system() == "Linux":
@@ -23,30 +15,70 @@ class Shit_Player:
         self.face_up = (0,0,0)
         self.face_down = (1,1,1)
 
+        self.on_turn = False
+        self.done = False
+        self.disconnected = False
+
     uncard = staticmethod(lambda c: 'X' if c==0 else str(c))
     down_mask = staticmethod(lambda c: 'X' if c==0 else 'O')
 
     def print(self):
-        print(self.nick, ":")
+        self._resolve_states()
+        suf = " (DONE)" if self.done else ""
+        suf += " (DISCONNECTED)" if self.disconnected else ""
+        suf = " (ON TURN)" if self.on_turn else suf
+        print(self.nick, suf ,":")
         print(f"\tHand: {self.hand}")
         print(f"\tFace Up: {', '.join(map(self.uncard,self.face_up))}")
         print(f"\tFace Down: {', '.join(map(self.down_mask,self.face_down))}")
 
+    def is_done(self):
+        ret = self.hand == 0 and self.face_up == (0,0,0) and self.face_down == (0,0,0)
+        self.done = ret
+        return ret
+
+    def _resolve_states(self):
+        if self.on_turn:
+            self.done = False
+            self.disconnected = False
+            return
+        self.is_done()
+
+
 class Shit_Me(Shit_Player):
     def __init__(self,nick,id) -> None:
         super().__init__(nick)
-        self.hand = [0 for i in range(13)]
+        self.serv_nick = None
+        self.hand = [0 for _ in range(13)]
         self.play_from = "hand"
         self.id = id
+
+        self.recon = False
 
     card_names = ["2","3","4","5","6","7","8","9","10","J","Q","K","A"]
 
     def print(self):
-        print(self.nick, "(YOU):")
+        self._resolve_states()
+        if self.done:
+            print(self.nick, " (YOU) (DONE):")
+            print("\tCongrats! You won!")
+            return
+        suf = " (DONE)" if self.done else ""
+        suf = " (ON TURN)" if self.on_turn else suf
+        print(self.nick, f" (YOU){suf}:")
         print(f"\tHand:\t{'|'.join(map(lambda n: f'{n:>2}',self.card_names))}")
         print(f"\t\t {'| '.join(map(self.uncard,self.hand))}")
         print(f"\tFace Up: {', '.join(map(self.uncard,self.face_up))}")
         print(f"\tFace Down: {', '.join(map(self.down_mask,self.face_down))}")
+
+    def clear(self):
+        self.hand = [0 for _ in range(13)]
+        self.face_up = (0,0,0)
+        self.face_down = (1,1,1)
+
+        self.on_turn = False
+        self.done = False
+        self.recon = False
 
     def update_play_from(self) -> None:
         if self.hand.count(0) == 13:
@@ -66,6 +98,20 @@ class Shit_Me(Shit_Player):
         else: 
             self.play_from = "face_down"
             return
+
+    def has_cards(self, card, count):
+        self.update_play_from()
+        if self.play_from == "hand":
+            return self.hand[card-2] >= count
+        elif self.play_from == "face_up":
+            return self.face_up.count(card) >= count
+        elif self.play_from == "face_down":
+            return True
+
+    def is_done(self):
+        self.update_play_from()
+        self.done = self.play_from is None
+        return self.done
 
     def play_cards(self) -> int:
         card, amount = 0,0
@@ -134,28 +180,29 @@ class Shit_State(Enum):
     PLAYING_ON_TURN = 5
     PLAYING_DONE = 6
 
-shit_input_format = {
-    Shit_State.MAIN_MENU: None, # number (lobby idx), "new" or "reconnect" (respond to MM CHOICE)
-    Shit_State.LOBBY: None, # no input (only LOBBY STATE)
-    Shit_State.LOBBY_OWNER: None, # "START" (respond to LOBBY START)
-    Shit_State.PLAYING_TRADING: None, # "A B C" - cards to have in face-up (respond to TRADE)
-    Shit_State.PLAYING_WAITING: None, # no input (only GAME STATE or ON TURN)
-    Shit_State.PLAYING_ON_TURN: None, # "A B" - card, amount (respond to GIMME CARD)
-    Shit_State.PLAYING_DONE: None, # no input (only GAME STATE or ON TURN)
-}
-
 class Shit_Game:
-    def __init__(self, me, players_cnt, packs_cnt=1):
+    cache_name = "shit_cache"
+    def __init__(self, me, players_cnt=4, packs_cnt=1):
         self.id = -1
         self.state = Shit_State.MAIN_MENU
-
-        self.players = {me.nick: me}
+        
+        self.players_cnt = players_cnt
+        self.packs_cnt = packs_cnt
+        self.clear()
         self.me = me
-        self.top_card = 0
-        self.play_deck = 0
-        self.draw_pile = packs_cnt*13*4 - players_cnt*9
+
         if self.draw_pile < 0:
             raise ValueError("Not enough cards for players")
+
+        self.serv_msg = None
+        self.lobby_cnt = 0
+
+    def clear(self):
+        self.players = {}
+        self.me.clear()
+        self.top_card = 0
+        self.play_deck = 0
+        self.draw_pile = self.packs_cnt*52 - self.players_cnt*9
 
     def add_player(self, player):
         self.players[player.nick] = player
@@ -163,249 +210,79 @@ class Shit_Game:
     def __getitem__(self, key):
         return self.players[key]
 
-    def print_state(self, serv_msg=None):
+    def __iter__(self):
+        return iter(self.players.values())
+
+    def is_legal(self, card):
+        self.me.update_play_from()
+        if self.me.play_from == "face_down":
+            return True
+        if self.top_card == 18:
+            return card == 8
+        if card in {2, 3, 10}:
+            return True
+        if self.top_card == 7:
+            return card <= 7
+        return card >= self.top_card
+
+    def print(self,lobbies=None):
         clear()
-        print(f"Top Card: {Shit_Player.uncard(self.top_card)} ({self.play_deck})")
+        if self.state in {Shit_State.MAIN_MENU}:
+            self._print_lobbies(lobbies)
+        elif self.state in {Shit_State.LOBBY, Shit_State.LOBBY_OWNER}:
+            self._print_lobby()
+        else:
+            self._print_state()
+
+    def _print_state(self): # GAME screen
+        if self.top_card == 18:
+            print(f"Top Card: 8 ({self.play_deck})", "ACTIVE")
+        else:
+            print(f"Top Card: {Shit_Player.uncard(self.top_card)} ({self.play_deck})")
         print("Draw Pile Height:", self.draw_pile)
         for player in filter(lambda p: p.nick != self.me.nick, self.players.values()):
             player.print()
         self.me.print()
-        print(serv_msg or "")
+        print(self.serv_msg or "")
+
+    def _print_lobbies(self, lobbies): # MM screen
+        if lobbies is None:
+            return
+        print("n.\towner\tplayers")
+        for i, lobby in enumerate(lobbies, start=1):
+            print(f"{i}.\t{lobby[0]}\t{lobby[1]}/{self.players_cnt}")
+        self.lobby_cnt = len(lobbies)
+        print(self.serv_msg or "")
+
+    def _print_lobby(self): # LOBBY screen
+        print("n.\tnick")
+        for i, player in enumerate(self.players.keys(), start=1):
+            print(f"{i}.\t{player}", " (OWNER)" if i==0 else " (YOU)" if player==self.me.serv_nick else "")
+        print(self.serv_msg or "")
 
     def cache_player(self):
-        with open("shit_cache", "w") as f:
+        with open(self.cache_name, "w") as f:
             f.write(f"""
             {self.me.nick}
             {self.me.id}
             {self.id}
             """)
 
-    def get_cache(self, fromfile=False):
-        if not fromfile:
-            return (self.me.nick, self.me.id, self.id)
-        with open("shit_cache", "r") as f:
-            nick, id, game_id = f.read().split()
-            return (nick, int(id), int(game_id))
-
-class Shit_Comm:
-    handlers = {
-        "MAIN MENU": handle_main_menu,
-        "MM CHOICE": None,
-        "RECON": None,
-        "LOBBIES": None,
-        "LOBBY STATE": None,
-        "LOBBY START": None,
-        "TRADE NOW": None,
-        "ON TURN": None,
-        "GIMME CARD": None,
-        "GAME STATE": None,
-        "WRITE": handle_write
-    }
-
-    def __init__(self, 
-                 nick, 
-                 serv_info=("127.0.0.1", 4444),
-                 timeout=22.0, 
-                 log="shit_log"):
-        self._pl_quit = False
-        self._quit_lock = threading.Lock()
-
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._sock.settimeout(timeout)
-        self._sock.connect(serv_info)
-        #self._sockfile = self._sock.makefile("r")
-        nlen, pid = self.handlers["MAIN MENU"](self._sock, nick)
-
-        self.serv_nick = nick[:nlen]
-        print(pid, self.serv_nick)
-
-        self.game = Shit_Game(Shit_Me(nick, pid), 4)
-
-    def __del__(self):
-        #print("Closing socket")
-        self._sock.close()
-
-    def quit(self, val=None):
-        with self._quit_lock:
-            if val is None:
-                return self._pl_quit
-            self._pl_quit = val
-            return val
-
-    def sendall(self, msg):
-        self._sock.sendall((msg+"\x0A").encode())
-
-    def comm_loop(self):
-        inp = ""
-        ret = None
-        shit_patience = 5 
-        while shit_patience > 0:
-            with self._sock.makefile("r") as f:
-                inp = f.readline()
-            inp = inp.rstrip("\x0A").split('^')
-            #print(inp)
-
-            if inp[0] not in self.handlers.keys():
-                print("Unknown command:", inp[0])
-                shit_patience -= 1
-                continue
-
-            if self.quit():
-                self.sendall("QUIT")
-                if(self.game.state == Shit_State.MAIN_MENU):
-                    return
-                self.quit(False)
-                shit_patience = 5
-                continue
-            self.sendall("ACKN")
-
-            try:
-                ret = self.handlers[inp[0]](self.game, inp[1:])
-            except Exception as e:
-                print(e)
-                shit_patience -= 1
-                continue
-            else:
-                if ret is not None:
-                    self.sendall("^".join(ret))
-                shit_patience = 5
-        raise Exception("Server is not responding")
-
-def quit_input(quit_setter):
-    while True:
+    def del_cache(self):
         try:
-            inp = input("Quit? (y/n): ")
-        except Exception:
-            #kill thread
-            return
-        else:
-            if inp == "y":
-                quit_setter(True)
-            elif inp == "n":
-                quit_setter(False)
+            os.remove(self.cache_name)
+        except FileNotFoundError:
+            pass
+
+    def get_cache():
+        with open(Shit_Game.cache_name, "r") as f:
+            nick, id, game_id = f.read().split()
+            try: 
+                return (nick, int(id), int(game_id))
+            except:
+                raise ValueError("Invalid cache file")
+
+
 
 if __name__ == "__main__":
-    #ask for nick, max len = 12
-    nick = "A"*13
-    while len(nick) > 12:
-        nick = input("Enter your nick: ")
-
-    gm = Shit_Comm(nick)
-    qinp = threading.Thread(target=quit_input, args=(gm.quit,))
-    qinp.start()
-    gm.comm_loop()
-    del gm
     exit()
-
-
-pass
-if __name__ == "":
-    import random
-    import os
-    clear = lambda: os.system('clear')
-
-#dict of players, key is nick
-    players = {f"player{i}": Shit_Player(nick=f"player{i}") for i in range(1,5)}
-    me = Shit_Me(nick="me")
-
-    me.hand = list(0 for i in range(13))
-    me.hand[0] = 1
-    me.face_up = list(random.randint(2,14) for i in range(3))
-    me.face_down = [1,1,1]
-
-    game = Shit_Game(players_cnt=5)
-    game.players = players
-    game.add_player(me)
-
-    game.print_state()
-
-    while True:
-        clear()
-        game.print_state()
-        print("Your turn!")
-        game.me.play_cards()
-
-    exit()
-
-class Shit_Cache_old:
-    def __init__(self) -> None:
-        pass
-
-
-class Shit_Game_old:
-    req_set = {"PING", "LOBBY", "CARDS"}
-
-    def __init__(
-        self, 
-        serv_info: tuple(str, int) = ("127.0.0.1",4242), 
-        timeout: float = 10.0,
-        err_log: str = "game.log"
-        ) -> None:
-        
-        self._serv_sock: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._serv_sock.settimeout(timeout)
-        self._serv_sock.connect(serv_info)
-        self._serv_file = None
-
-        self._err_log_path = err_log
-
-        self._req_handler_t: threading.Thread = threading.Thread(target=self._req_handler,args=(self,))
-        self._cache: Shit_Cache_old = None
-        self._lobbies = None
-
-        self._req_handler_t.start()
-
-    def send_request(self, data_parser: Callable[[Shit_Game, list[Any]], bool], req: Request, req_data = None) -> bool:
-        if not req in Shit_Game.req_set:
-            return False
-
-        self._serv_send(req)
-        if req_data is not None: self._serv_send(req_data)
-        self._serv_send(b"\n")
-
-        data_parser(self, self._sock_readline())
-        pass
-
-    def _load_lobby_list(self, data):
-        pass
-
-    def _load_cache(self, data):
-        pass
-
-    def _sock_readline(self) -> str:
-        if self._serv_file is None:
-            self._serv_file = self._serv_sock.makefile()
-        return self._serv_file.readline() # may raise timeout err
-
-    def _serv_send(self, data: bytes):
-        self._serv_sock.send(data)
-
-    def _log_err(self, errmsg: str):
-        with open(self._err_log_path, "a") as logf:
-            logf.write(f"[ERR] {datetime.now()}: {errmsg}")
-
-    def _req_handler(self):
-        handlers = {
-            "MAIN MENU": None,
-            "GIMME CARD": None,
-            "TRADE NOW": None,
-            "YOUR TURN": None,
-            "TOP CARD": None,
-            "WRITE": None
-        }
-
-        while True:
-            req = self._sock_readline()
-            for prefix, handler in handlers.items():
-                if req.startswith(prefix):
-                    self._serv_send(b"ACK\n")
-
-                    reply = handler(req.lstrip(prefix)) # reply contains newline
-
-                    self._serv_send(reply)
-                    reply = self._sock_readline()
-                    if reply != b"ACK":
-                        pass
-                    break
-            else:
-                self._log_err(f"Unknown request: {req}")

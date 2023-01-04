@@ -21,6 +21,7 @@ void game_create(player_t *owner, game_t *out)
     out->players[0] = owner;
     owner->game_id = out->id;
     owner->state = PL_LOBBY_OWNER;
+    // state mutex?
 }
 
 /**
@@ -29,7 +30,7 @@ void game_create(player_t *owner, game_t *out)
  * other true values are for "reconnecting" players
  */
 bool add_allowed[][7] = {
-    [GM_LOBBY] = {[PL_MAIN_MENU] = true, [PL_LOBBY] = true },
+    [GM_LOBBY] = {[PL_MAIN_MENU] = true, [PL_LOBBY] = false }, // cannot reconnect from lobby.
     [GM_PREPARE] = {0},
     [GM_PLAYING] = {[PL_PLAYING_WAITING] = true, [PL_PLAYING_ON_TURN] = true, [PL_PLAYING_TRADING] = true , [PL_DONE] = false},
     [GM_FINISHED] = {0}
@@ -41,15 +42,17 @@ bool game_add_player(game_t *game,player_t *pl)
     if(!game || !pl) return false;
     if(!add_allowed[game->state][pl->state]) return false;
 
-    for(;i<MAX_PLAYERS && game->players[i];i++)
-        if(game->players[i]->id == pl->id) break;
+    for(;i<MAX_PLAYERS && game->players[i];i++);
+    //    if(game->players[i]->id == pl->id) break;
 
     if(i<=MAX_PLAYERS)
     {
-        game->players[i] = pl;
         pl->game_id = game->id;
-        if(pl->state != PL_MAIN_MENU)
-            game_comm(game, i, SRRQ_RECON, game->state == GM_LOBBY ? "L" : "R", 1);
+        game->players[i] = pl;
+        if(pl->state != PL_MAIN_MENU){
+            game_comm(game, i, SRRQ_RECON, "R", 1);
+            pl->comm_if.conn_state = PL_CONN_UP;
+        }
         pl->state = game->state == GM_LOBBY? PL_LOBBY : PL_PLAYING_WAITING;
         return true;
     }
@@ -157,7 +160,7 @@ void player_trade_cards(game_t *game, int pl_idx)
     player_t *player = game->players[pl_idx];
     ret = game_comm(game, pl_idx, SRRQ_TRADE_NOW, &j, sizeof(j));
     printD("TRADE: pl_idx=%d, comm=%d\n",pl_idx, ret);
-    if(ret == COMM_QUIT || ret == COMM_DIS) return;
+    if(ret != COMM_OK) return;
     for(int i=0; i<3; i++)
     {
         card = ((card_t *)&j)[i];
@@ -165,7 +168,7 @@ void player_trade_cards(game_t *game, int pl_idx)
         if(!player->hand[card-2])
         {
             ret = game_comm(game, pl_idx, SRRQ_WRITE, "You don't have that card.", sizeof("You don't have that card."));
-            if(ret == COMM_QUIT || ret == COMM_DIS) { printD("TRADE: pl quit=%d\n",pl_idx);  return;}
+            if(ret != COMM_OK) { printD("TRADE: pl quit=%d\n",pl_idx);  return;}
             break; //tries to cheat -> cannot trade
         }
         // switching
@@ -311,18 +314,15 @@ void game_loop(game_t *game)
     for(; game_playing_count(game) > 1 ; curr_player++, curr_player %= MAX_PLAYERS)
     {
         if(!game->players[curr_player]) continue;
-        if(game->players[curr_player]->state == PL_DONE) 
-        {
-            //player won, but still spectating
-            continue;
-        }
+        if(game->players[curr_player]->comm_if.conn_state == PL_CONN_DOWN) continue; // reconnecting
+        if(game->players[curr_player]->state == PL_DONE) continue; // player has won, spectating 
 
         player = game->players[curr_player];
         player->state = PL_PLAYING_ON_TURN;
 
         game_send_all(game, SRRQ_GAME_STATE, game, sizeof(game_t *));
         game_send_all(game, SRRQ_ON_TURN, player->nick, NIC_LEN);
-        if(!game->players[curr_player]) continue;   // player might have disconnected
+        if(!game->players[curr_player]) goto gloop_end;   // player might have disconnected
 
         // check if player cannot play
         if((reason=game_check_cannot_play(game, player)))
@@ -340,6 +340,8 @@ void game_loop(game_t *game)
         // wait till player plays valid card
         legal_check: 
         j = reason = (player_plays_from(player)==PL_PILE_F_DWN); // load to reason for later cache
+        game_send_all(game, SRRQ_GAME_STATE,game, sizeof(game_t *));
+        if(!game->players[curr_player]) goto gloop_end;   // player might have disconnected
         game_send_all(game, SRRQ_WRITE, "Waiting for player to play", sizeof("Waiting for player to play"));
         if(game_comm(game, curr_player, SRRQ_GIMME_CARD, &j, sizeof(int)) != COMM_OK) goto gloop_end;   // player might have disconnected
         //j: LSB: card, other bytes: count
@@ -389,6 +391,12 @@ void game_loop(game_t *game)
         {
             game->active_8 = false;
             card_stack_clear(game->play_deck);
+            if(!player_plays_from(player))
+            {
+                game_comm(game, curr_player, SRRQ_WRITE, "Congrats, you won!", sizeof("Congrats, you won!"));
+                game->players[curr_player]->state = PL_DONE;
+                goto gloop_end;
+            }
             goto legal_check; // plays again
         }
 
@@ -399,7 +407,8 @@ void game_loop(game_t *game)
         if(!player_plays_from(player))
         {
             game_comm(game, curr_player, SRRQ_WRITE, "Congrats, you won!", sizeof("Congrats, you won!"));
-            continue;
+            game->players[curr_player]->state = PL_DONE;
+            goto gloop_end;
         }
 
         cannot_play: 
@@ -418,47 +427,34 @@ void game_loop(game_t *game)
     }
 }
 
-bool resp_can_timeout[] = {
-    [SRRQ_MAIN_MENU] = false,
-    [SRRQ_MM_CHOICE] = true,
-    [SRRQ_RECON] = false,
-    [SRRQ_LOBBIES] = false,
-    [SRRQ_LOBBY_STATE] = false,
-    [SRRQ_LOBBY_START] = true,
-    [SRRQ_TRADE_NOW] = true,
-    [SRRQ_ON_TURN] = false,
-    [SRRQ_GIMME_CARD] = true,
-    [SRRQ_GAME_STATE] = false,
-    [SRRQ_WRITE] = false
-};
 comm_flag_t game_comm(game_t *game, int pl_idx, server_request_t request, void *data, int dlen)
 {
     comm_flag_t ret;
     if(!game->players[pl_idx]) return COMM_DIS;
     ret = game->players[pl_idx]->comm_if.send_request(game->players[pl_idx]->comm_if.cd, request, data, dlen);
     
-    if(ret == COMM_OK) return COMM_OK;
-
-    if(ret == COMM_QUIT)
+    switch (ret)
     {
+    case COMM_OK:
+    case COMM_IGN:
+        break;
+
+    case COMM_QUIT:
         queue_push(game->players+pl_idx, Q_quiter);
         game->players[pl_idx] = NULL;
-    }
+        break;
 
-    if(ret == COMM_TO)
-    {
-        if(resp_can_timeout[request]) return COMM_TO; // user might not have responded in time
-        else ret = COMM_DIS;
-    }
-
-    if(ret == COMM_DIS || ret == COMM_BS)
-    {
+    case COMM_DIS:
+    case COMM_BS:
+    case COMM_TO:
         game->players[pl_idx]->comm_if.conn_state = PL_CONN_DOWN;
-        //quitter_push(game->players[pl_idx]);
+        queue_push(game->players+pl_idx, Q_quiter);
         game->players[pl_idx] = NULL;
-        return COMM_DIS;
-    }
+        break;
 
+    default:
+        break;
+    }
     return ret;
 }
 
@@ -479,10 +475,16 @@ void *game_thread(void *arg)
     game->state = GM_LOBBY;
     for(int lobby_idle = 0;; lobby_idle++)
     {
+        if(lobby_idle > 30)
+        {
+            //log error
+            goto lobby_owner_quit;
+        }
+
         *s=0;
         // tell owner the state of the lobby
         ret = game_comm(game, 0, SRRQ_LOBBY_STATE, game, sizeof(game_t *));
-        if(ret == COMM_QUIT || ret == COMM_DIS) goto lobby_owner_quit;
+        if(ret != COMM_OK) goto lobby_owner_quit;
 
         // tell rest of the players the state of the lobby
         for(int i=1; i<MAX_PLAYERS; i++)
@@ -493,21 +495,23 @@ void *game_thread(void *arg)
 
         // wait for owner to start the game
         game_comm(game, 0, SRRQ_LOBBY_START, s, 1);
-        if(ret == COMM_QUIT || ret == COMM_DIS) goto lobby_owner_quit;
-        if(ret == COMM_TO) *s=0;
+        if(ret != COMM_OK && ret != COMM_IGN) goto lobby_owner_quit;
+        if(ret == COMM_IGN) *s=0;
 
-        if(*s && game_player_count(game) >= 2) break;
-        if(lobby_idle > 30)
-        {
-            //log error
-            goto lobby_owner_quit;
+        if(*s && game_player_count(game) < 2){
+            game_comm(game, 0, SRRQ_WRITE, "Not enough players to start the game.", sizeof("Not enough players to start the game."));
+            if(ret != COMM_OK) goto lobby_owner_quit;
+            continue;
         }
+        else break;
     }
 
     free(s);
     game->state = GM_PREPARE;
+    game_send_all(game, SRRQ_WRITE, "GAME STRATS", sizeof("GAME STRATS"));
     game_init(game);
     game_loop(game);
+    game_send_all(game, SRRQ_WRITE, "GAME ENDS", sizeof("GAME ENDS"));
     game->state = GM_FINISHED;
 
     for(int i=1; i<MAX_PLAYERS; i++)
@@ -524,7 +528,7 @@ void *game_thread(void *arg)
         for(int i=0; i<MAX_PLAYERS; i++)
         {
             if(!game->players[i]) continue;
-            game_comm(game,i,SRRQ_WRITE, "The lobby owner has quit.", sizeof("The lobby owner has quit."));
+            game_comm(game,i,SRRQ_WRITE, "The lobby owner quit or idle for too long.", sizeof("The lobby owner quit or idle for too long."));
             if(game->players[i]){
                 queue_push(game->players+i, Q_quiter);
                 game->players[i] = NULL;

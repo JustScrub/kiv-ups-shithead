@@ -1,3 +1,5 @@
 server/server
 client/__pycache__
+client/shit_cache
+client/test_c.py
 .vscode

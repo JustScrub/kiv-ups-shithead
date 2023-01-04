@@ -11,12 +11,6 @@
 #define DELIM '^'
 typedef comm_flag_t (*proto_fn)(int cd,char *rest, void *data);
 
-typedef struct {
-   char nick[NIC_LEN+1];
-   unsigned id;
-   unsigned gid;
-} recon_cache_t;
-
 comm_flag_t shit_req_send(int cd,server_request_t request, void *data, int dlen);
 
 /**

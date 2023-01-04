@@ -84,6 +84,10 @@ comm_flag_t shit_req_send(int cd,server_request_t request, void *data, int dlen)
 
     switch(flag)
     {
+        case COMM_IGN:
+            if(request == SRRQ_LOBBY_START) return COMM_IGN;
+            if(TO_cnt++ > RETRY_CNT) { break; }
+            goto send;
         case COMM_TO:
         case COMM_BS:
             if(TO_cnt++ > RETRY_CNT) { close(cd); break; }
@@ -123,6 +127,7 @@ comm_flag_t shit_req_handle(int cd,short rq_bfield, void *data)
 #define to_dis_handle(readlen) if(readlen == 0) return COMM_DIS; \
                                if(readlen < 0) return COMM_TO
 #define quit_handle(bfr) if(!strncmp(bfr, "QUIT\x0A", 5)) return COMM_QUIT
+#define ignore_handle(bfr) if(!strncmp(bfr, "IGNR\x0A", 5)) return COMM_IGN
 #define format_check(bfr, fmt) if(strncmp(bfr, fmt, strlen(fmt))) return COMM_BS; \
                                else bfr += strlen(fmt)
 #define write_check(ret)     if(ret < 0) {if(errno == EAGAIN || errno == EWOULDBLOCK) return COMM_TO; return COMM_DIS; }
@@ -175,8 +180,9 @@ comm_flag_t send_LOBBY_START(int cd, char *bfr, void *data)
     ret = ack_handle(cd, bfr);
     if(ret != COMM_OK) return ret;
 
-    ret = read(cd, bfr, 4);
+    ret = read(cd, bfr, 5);
     to_dis_handle(ret);
+    ignore_handle(bfr);
     quit_handle(bfr);
 
     if(!strncmp(bfr, "YES\x0A", 4)) *(char*)data = 1;
@@ -199,6 +205,7 @@ comm_flag_t send_TRADE_NOW(int cd, char *bfr, void *data)
     ret = read(cd, bfr, BFR_LEN);
     to_dis_handle(ret);
     quit_handle(bfr);
+    ignore_handle(bfr);
     format_check(bfr, "TRADE^");
     if(bfr[3] != 0x0A) return COMM_BS;
 
@@ -246,12 +253,12 @@ comm_flag_t send_MM_CHOICE(int cd, char *bfr, void *data)
 
     ret = read(cd, bfr, BFR_LEN);
     printD("send_MM_CHOICE read: bfr=%s,ret=%d\n", bfr, ret);
-    if(ret < 0) // Timeout OK with this request
+    to_dis_handle(ret);
+    if(!strncmp(bfr, "IGNR\x0A", 5))
     {
         *(int64_t*)data = -1;
-        return COMM_TO;
+        return COMM_IGN;
     }
-    if(ret == 0) return COMM_DIS;
     quit_handle(bfr);
 
     if(!strncmp(bfr, "LOBBY^", 6))
@@ -314,6 +321,7 @@ comm_flag_t send_GIMME_CARD(int cd, char *bfr, void *data)
     ret = read(cd, bfr, BFR_LEN); // "CARD^card^cnt\x0A"
     printD("send_GIMME_CARD read: bfr=%s,len=%d\n", bfr, ret);
     to_dis_handle(ret);
+    ignore_handle(bfr);
     quit_handle(bfr);
     format_check(bfr, "CARD^");
 
@@ -351,7 +359,7 @@ comm_flag_t send_RECON(int cd, char *bfr, void *data)
 comm_flag_t send_LOBBY_STATE(int cd, char *bfr, void *data)
 {
     game_t *g = (game_t*)data;
-    int len = sprintf(bfr, "LOBBY STATE");
+    int len = sprintf(bfr, "LOBBY STATE^%d", g->id);
     for(int i=0; i<MAX_PLAYERS; i++)
     {
         if(!g->players[i]) continue;
@@ -367,12 +375,12 @@ comm_flag_t send_LOBBY_STATE(int cd, char *bfr, void *data)
 
 comm_flag_t send_LOBBIES(int cd, char *bfr, void *data)
 {
-    int *g = (int *)data;
+    lobby_info_t *g = (lobby_info_t *)data;
     //int cnt;
     int len = sprintf(bfr, "LOBBIES");
-    for(;*g;g+=2)
+    for(;g->gid;g++)
     {
-        len += snprintf(bfr+len,BFR_LEN-len, "^%d:%d",*g, *(g+1));
+        len += snprintf(bfr+len,BFR_LEN-len, "^%s:%d",g->owner_nick, g->pl_cnt);
     }
     strncat(bfr, "\x0A", 2);
     int ret = write(cd, bfr, strlen(bfr));
@@ -434,7 +442,7 @@ comm_flag_t send_GAME_STATE(int cd, char *bfr, void *data)
  
     }
     len += snprintf(bfr+len, BFR_LEN-len, "^%d:%d:%d\x0A", 
-                            game_get_top_card(g), 
+                            game_get_top_card(g) + 10*g->active_8, 
                             card_stack_height(g->play_deck), 
                             card_stack_height(g->draw_deck));
     int ret = write(cd, bfr, len);

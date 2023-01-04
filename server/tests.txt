@@ -196,3 +196,43 @@ GAME DELTER TEST:
         sleep(1);
         printD("serv_acc: dwn_pl=%p", players[6]);
     }
+
+multiclient:
+    code {
+    player_t *p = (player_t *)arg;
+    comm_flag_t re;
+    *(int *)p->nick = p->id;
+    re = p->comm_if.send_request(p->comm_if.cd, SRRQ_MAIN_MENU, p->nick, sizeof(int));
+    if(re != COMM_OK)
+    {
+        printD("mm_player_thread: exit=%d, reason=%d\n",p->id,re);
+        close(p->comm_if.cd);
+        free(p);
+        return NULL;
+    }
+    int ii=0;
+    while(1)
+    {
+        re = p->comm_if.send_request(p->comm_if.cd, SRRQ_WRITE, "Card pls", 8);
+        if(re != COMM_OK)
+        {
+            printD("mm_player_thread: exit=%d, reason=%d\n",p->id,re);
+            close(p->comm_if.cd);
+            free(p);
+            return NULL;
+        }
+        ii=0;
+        re = p->comm_if.send_request(p->comm_if.cd, SRRQ_GIMME_CARD, &ii, sizeof(int));
+        if(re != COMM_OK)
+        {
+            printD("mm_player_thread: exit=%d, reason=%d\n",p->id,re);
+            close(p->comm_if.cd);
+            free(p);
+            return NULL;
+        }
+        printf("card,cnt=%d,%d\n", (char)ii, ii>>8);
+        sleep(1);
+    }
+
+    return NULL;
+    }

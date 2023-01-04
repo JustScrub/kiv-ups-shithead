@@ -9,6 +9,18 @@ typedef enum {
     PL_CONN_UP,
 } player_conn_state_t;
 
+typedef struct {
+   char nick[NIC_LEN+1];
+   unsigned id;
+   unsigned gid;
+} recon_cache_t;
+
+typedef struct {
+    char owner_nick[NIC_LEN+1];
+    int pl_cnt;
+    int gid;
+} lobby_info_t;
+
 /*
 typedef enum {
     PLRQ_MM_CHOICE  = 1<<0,
@@ -44,6 +56,7 @@ typedef enum {
     COMM_QUIT,       /**< client wants to quit */
     COMM_BS ,         /**< Client sent bullshit */
     COMM_DIS,        /**< client disconnected (without QUIT) */
+    COMM_IGN,         /**< request ignored, but client connected (user did not input anything) */
     COMM_TO         /**< timeout */
 } comm_flag_t;
 
