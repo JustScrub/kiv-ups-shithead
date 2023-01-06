@@ -42,6 +42,7 @@ void player_clear(player_t *player);
 int player_hand_card_cnt(player_t *player);
 /**
  * @brief Checks if player has at least \c cnt of a specific card value
+ * If plays from FACE DOWN, \c card is the card and \c cnt IS INDEX of the card (0-2)
  * 
  * @param player 
  * @param card_idx
@@ -63,6 +64,17 @@ bool player_has_card(player_t *player, card_t card, int cnt);
  */
 int player_plays_from(player_t *player);
 
+/**
+ * @brief Plays \c cnt cards of value \c card from whatever player plays from.
+ * If plays from face down, \c cnt is INDEX of the card (0-2) (and \c card is irrelevant).
+ * 
+ * @param player 
+ * @param card 
+ * @param cnt 
+ * @param play_deck 
+ * @return true 
+ * @return false 
+ */
 bool player_play_cards(player_t *player, card_t card, int cnt, card_stack_t *play_deck);
 bool player_draw_cards(player_t *player, int cnt, card_stack_t *draw_deck);
 char player_secret_face_down(player_t *player);

@@ -1,17 +1,24 @@
-\subsection{Komunikace}
 
-Komunikace serveru a klienta je realizována protokolem založeným na zprávách typu požadavek (request) a odpověď (response). Na komunikační úrovni jsou si oba rovni: jak klient, tak server mohou zasílat požadavky, na něž čekají odpověď. Káždá zpráva musí být potvrzena příjemcem vysláním signálu \verb=ACK=. Nepřijetí signálu značí selhání komunikace. Jedna úspěšná komunikační "transakce" se řídí následujícími kroky:
-\begin{enumerate}
-    \item požadavek (\verb=i=)
-    \item \verb=ACK= (\verb=c=)
-    \item odpověď (\verb=c=)
-    \item \verb=ACK= (\verb=i=)
-\end{enumerate}
-kde \verb=i= značí iniciátora požadavku a \verb=c= pachatele odpovědi (commitor). Každá zpráva (požadavek i odpověď) má následující formát:
-\begin{enumerate}
-    \item indikátor (jedinečný řetězec kapitálek, může obsahovat mezery)
-    \item data
-    \item znak nového řádku (ACII 0x0A)
-\end{enumerate}
+\section{Pravidla}
+Shithead je tahová karetní hra, používá se běžný žolíkový balíček bez žolíků. Barvy karet v pravidlech nehrají roli, pouze jejich hodnoty: 2 - 10, J, Q, K, A. Eso (karta A) má nejvyšší hodnotu, karta s hodnotou 1 není. Maximální počet hráčů závisí na počtu balíčků (a tedy celkovém početu karet). Každý hráč začíná s 9 kartami (viz dále), karet musí být tolik, aby každý na začátku obdržel tento počet karet. Při jednom standardním balíčku (52 karet) je maximální počet hráčů 5. Minimální počet je vždy 2.
 
-Vzhledem k nátuře herního cyklu je ovšem potřeba, aby server poslal data klientovi i bez požadavku, např. oznámení o zahájení kola daného klienta - klient se nedotazuje, zda je na řadě, ale čeká na zprávu od serveru. Tento typ komunikace neodpovídá výše popsanému protokolu. Jelikož je ale realita pomíjivá a můžeme ji popisovat jen pomocí modelů konstruovaných naším chápáním, je možné ohnout její podstatu a říci, že veškeré zprávy typu "oznámení" jsou pouze požadavky s daty. Odpovědí na tento typ požadavku je pak zpráva \verb=THANKS=.
+\subsection{Příprava hry}
+Každému hráči jsou náhodně rozdány 3 sady trojic karet. První trojici hráč drží v ruce a karty vidí pouze on. Druhá je vyložena na stůl lícem vzhůru tak, aby je viděli všichni hráči. Poslední sada je položena lícem dolů, takže je nezná nikdo, ani vlastník karet. Zbytek karet, který nebyl rozdán, je poležen na hromadu jako lízací balíček. Před začátek hry si hráči smí libovolně měnit karty lícem nahoru s kartami v ruce. Záčíná hrát ten hráč, který má v ruce kartu hodnoty 3. Pokud ji nemá nikdo, pak kartu hodnoty 4 a tak dále.
+
+\subsection{Hra}
+V každém tahu hráč hraje z jedné sady karet, kterou má u sebe. Pokud má karty v ruce, musí hrát z ruky. Pokud nemá karty v ruce, pak hraje kartami, jež všichni vidí. Po vyčerpání této sady hráč hraje s kartami, jejichž hodnotu nezná nikdo - hraje tedy na slepo. Pokud hráč může hrát, musí hrát. Pokud má hráč více karet stejného čísla a toto číslo může zahrát, smí zahrát jednu nebo více těchto karet naráz, všechny však musí být ze stejné sady. Například pokud má hráč v ruce 2 karty hodnoty dva a jednu takovou v sadě lícem nahoru, nemůže hrát všemi třemi kartami. Může ale zahrát obě dvojky z ruky a v pozdějším kole dvojku z druhé sady. Dokud je na stole i lízací balíček, hráči si musí na konci kola vzít do ruky tolik karet, aby měli alespoň 3 (pokud jich má víc, nebere nic).
+
+Pro vykládání karet platí dvě základní pravidla: na prázdný stůl je možné zahrát cokoliv, na zahranou kartu pouze vyšší hodnotu. Z těchto pravidel však vybočují některé karty a situace, pro něž platí speciální pravidla:
+\begin{itemize}
+    \item 8 - další hráč na tahu musí zahrát také 8, nebo se vzdát kola. Platí jen pro dalšího hráče, pokud ten 8 nezahraje, jinak se toto pravidlo posouvá dále... (Stejné jako např. pro eso ze hry Prší)
+    \item 2 - může být zahrána na kteroukoliv kartu (kromě "aktivní" osmičky), i s větší hodnotou
+    \item 3 - "neviditelná" - může být zahrána na kteroukoliv kartu (kromě aktivní 8), ale v dalším tahu platí hodnota karty pod ní (pod všemi trojkami na sobě).
+    \item 7 - musí být zahrána karta s \emph{menší} hodnotou nebo 7. Platí jen, pokud je vrchní karta 7 (pravidlo nezůstává do dalších kol).
+    \item 10 - může být zahrána na kteroukoliv jinou kartu (kromě aktivní 8). Pálí celý herní balíček vč. zahrané 10 a karty v něm se ve hře již neobjeví. Stejný hráč pak hraje ještě jednou.
+    \item Čtyři karty stejného čísla na sobě - stejné jako karta 10 (čtyři 10 nemají speciální pravidlo už jen proto, že se na sobě mohou objevit jen v případě, že je všechny zahrál jeden hráč...)
+\end{itemize}
+Pokud hráč nemá žádné karty, které by mohl zahrát, pak si do ruky bere celý odkládací balíček - tedy všechny dosud zahrané karty. Tím zároveň končí jeho tah. Pokud hráč hrál "na slepo" (ze sady lícem dolů), tak si do ruky také vezme celý odkládací balíček i se zahranou kartou. Pokud však hráč hraje na selpo na aktivní osmičku a vytažená karta není 8, pak mu v ruce zůstává pouze vybraná karta a pokračuje se dalším hráčem. Karty se v průběhu hry nikdy nedoplňují do sady lícem nahoru či dolů.
+
+\section{Komunikace a protokol}
+
+Aplikace klienta a serveru spolu komunikují jednoduchým "prefixovým" protokolem. Komunikace se dá přirovnat k manželství - server klientovi něco přikáže nebo ho o něčem informuje a klient musí poslušně přijmout. Klient sám od sebe nikdy žádnou zprávu neposílá, pouze potvrzuje či poskytuje data. Každá zpráva od serveru má jedinečný prefix. Zprávy, které nežádají data, klient potvrdí a tím je komunikace ukončena. Pokud server chce data od klienta, klient zprávu upět potvrdí a (případně, viz dál) pošle data od uživatele. Potrvzování má dvojí charakter: při obyčejném průběhu klient pošle řetězec "ACKN" ukončený znakem nového řádku. Pokud si všah uživatel přeje ukončit hru či klienta, klient pošle na server potvrzení "QUIT" - server pak ví, že klient s ním stále hovoří a že má hráče ukončit. Ukončení má za následek jednu ze dvou možností. Pokud "QUIT" přijde na zprávu "MM CHOICE" nebo "LOBBIES" (když je hráč v hlavním menu), klient je zcela ukončen

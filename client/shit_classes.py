@@ -12,14 +12,15 @@ class Shit_Player:
     def __init__(self, nick) -> None:
         self.nick = nick
         self.hand = 0
-        self.face_up = (0,0,0)
-        self.face_down = (1,1,1)
+        self.face_up = [0,0,0]
+        self.face_down = [1,1,1]
 
         self.on_turn = False
         self.done = False
         self.disconnected = False
 
-    uncard = staticmethod(lambda c: 'X' if c==0 else str(c))
+    card_names = ["2","3","4","5","6","7","8","9","10","J","Q","K","A"]
+    uncard = staticmethod(lambda c: 'X' if c==0 else Shit_Player.card_names[c-2])
     down_mask = staticmethod(lambda c: 'X' if c==0 else 'O')
 
     def print(self):
@@ -33,7 +34,7 @@ class Shit_Player:
         print(f"\tFace Down: {', '.join(map(self.down_mask,self.face_down))}")
 
     def is_done(self):
-        ret = self.hand == 0 and self.face_up == (0,0,0) and self.face_down == (0,0,0)
+        ret = self.hand == 0 and self.face_up.count(0) == 3 and self.face_down.count(0) == 3
         self.done = ret
         return ret
 
@@ -55,57 +56,73 @@ class Shit_Me(Shit_Player):
 
         self.recon = False
 
-    card_names = ["2","3","4","5","6","7","8","9","10","J","Q","K","A"]
+    hand_mask = staticmethod(lambda c: 'X' if c==0 else str(c))
 
     def print(self):
         self._resolve_states()
+        self.update_play_from()
         if self.done:
             print(self.nick, " (YOU) (DONE):")
             print("\tCongrats! You won!")
             return
-        suf = " (DONE)" if self.done else ""
-        suf = " (ON TURN)" if self.on_turn else suf
+        suf = " (ON TURN)" if self.on_turn else ""
         print(self.nick, f" (YOU){suf}:")
+        print(f"\tPlay from: {self.play_from.upper()}")
         print(f"\tHand:\t{'|'.join(map(lambda n: f'{n:>2}',self.card_names))}")
-        print(f"\t\t {'| '.join(map(self.uncard,self.hand))}")
+        print(f"\t\t {'| '.join(map(self.hand_mask,self.hand))}")
         print(f"\tFace Up: {', '.join(map(self.uncard,self.face_up))}")
         print(f"\tFace Down: {', '.join(map(self.down_mask,self.face_down))}")
 
     def clear(self):
         self.hand = [0 for _ in range(13)]
-        self.face_up = (0,0,0)
-        self.face_down = (1,1,1)
+        self.face_up = [0,0,0]
+        self.face_down = [1,1,1]
 
         self.on_turn = False
         self.done = False
         self.recon = False
 
+    def trade(self, cards):
+        for i in range(3):
+            if self.hand[cards[i]-2]:
+                self.hand[self.face_up[i]-2] += 1
+                self.hand[cards[i]-2] -= 1
+                self.face_up[i] = cards[i]
+            if cards[i] in self.face_up:
+                c = self.face_up.index(cards[i])
+                self.face_up[c] = self.face_up[i]
+                self.face_up[i] = cards[i]
+
+
+
     def update_play_from(self) -> None:
         if self.hand.count(0) == 13:
-            self.play_from = "face_up"
+            self.play_from = "face up"
         else: 
             self.play_from = "hand"
             return
 
         if self.face_up.count(0) == 3:
-            self.play_from = "face_down"
+            self.play_from = "face down"
         else: 
-            self.play_from = "face_up"
+            self.play_from = "face up"
             return
 
         if self.face_down.count(0) == 3:
             self.play_from = None
         else: 
-            self.play_from = "face_down"
+            self.play_from = "face down"
             return
 
-    def has_cards(self, card, count):
+    def has_cards(self, card, count, play_from=None):
         self.update_play_from()
-        if self.play_from == "hand":
+        if play_from is None: play_from = self.play_from
+
+        if play_from == "hand":
             return self.hand[card-2] >= count
-        elif self.play_from == "face_up":
+        elif play_from == "face up":
             return self.face_up.count(card) >= count
-        elif self.play_from == "face_down":
+        elif play_from == "face down":
             return True
 
     def is_done(self):
@@ -113,63 +130,14 @@ class Shit_Me(Shit_Player):
         self.done = self.play_from is None
         return self.done
 
-    def play_cards(self) -> int:
-        card, amount = 0,0
-        print("Play from:",self.play_from)
-
-        while self.play_from != "face_down":
-            inp = input("Card, Amount: ")
-            if inp == "quit":
-                exit(0)
-            inp = inp.split()
-            if len(inp) != 2:
-                print("Invalid input")
-                continue
-            card, amount = inp
-            if card not in self.card_names:
-                print("Invalid card")
-                continue
-            card = self.card_names.index(card)+2
-            try:
-                amount = int(amount)
-            except:
-                print("Amount must be an integer")
-                continue
-            print(card, amount)
-
-            if self.play_from == "hand" and \
-                self.hand[card-2] >= amount:
-                self.hand[card-2] -= amount
-                break
-
-            elif self.play_from == "face_up" and \
-                self.face_up.count(card) >= amount:
-                self.face_up = list(map(lambda c: 0 if c==card else c, self.face_up))
-                break
-
-            else:
-                print("You don't have that many cards!")
-        
-        while self.play_from == "face_down":
-            inp = input("Card order: ")
-            try:
-                card_idx = int(inp)
-            except:
-                print("Card order must be an integer")
-                continue
-
-            if card_idx not in range(1,4):
-                print("Invalid order")
-                continue
-            if self.face_down[card_idx-1] != 0:
-                self.face_down[card_idx-1] = 0
-                card, amount = self.face_down[card_idx-1], 1
-                break
-            else:
-                print("You don't have that card!")
-
+    def play_cards(self, card, cnt):
         self.update_play_from()
-        return card,amount
+        if self.play_from == "hand":
+            self.hand[card-2] -= cnt
+        elif self.play_from == "face up":
+            self.face_up = list(map(lambda c: 0 if c==card else c, self.face_up))
+        elif self.play_from == "face down":
+            self.face_down[card] = 0
 
 class Shit_State(Enum):
     MAIN_MENU = 0
@@ -182,27 +150,24 @@ class Shit_State(Enum):
 
 class Shit_Game:
     cache_name = "shit_cache"
-    def __init__(self, me, players_cnt=4, packs_cnt=1):
+    def __init__(self, me, players_cnt=4):
         self.id = -1
         self.state = Shit_State.MAIN_MENU
         
         self.players_cnt = players_cnt
-        self.packs_cnt = packs_cnt
-        self.clear()
         self.me = me
-
-        if self.draw_pile < 0:
-            raise ValueError("Not enough cards for players")
-
+        self.clear()
+        
         self.serv_msg = None
         self.lobby_cnt = 0
 
     def clear(self):
         self.players = {}
+        self.lobbies = []
         self.me.clear()
         self.top_card = 0
         self.play_deck = 0
-        self.draw_pile = self.packs_cnt*52 - self.players_cnt*9
+        self.draw_pile = 0
 
     def add_player(self, player):
         self.players[player.nick] = player
@@ -215,7 +180,7 @@ class Shit_Game:
 
     def is_legal(self, card):
         self.me.update_play_from()
-        if self.me.play_from == "face_down":
+        if self.me.play_from == "face down":
             return True
         if self.top_card == 18:
             return card == 8
@@ -225,10 +190,10 @@ class Shit_Game:
             return card <= 7
         return card >= self.top_card
 
-    def print(self,lobbies=None):
+    def print(self):
         clear()
         if self.state in {Shit_State.MAIN_MENU}:
-            self._print_lobbies(lobbies)
+            self._print_lobbies(self.lobbies)
         elif self.state in {Shit_State.LOBBY, Shit_State.LOBBY_OWNER}:
             self._print_lobby()
         else:
@@ -236,7 +201,7 @@ class Shit_Game:
 
     def _print_state(self): # GAME screen
         if self.top_card == 18:
-            print(f"Top Card: 8 ({self.play_deck})", "ACTIVE")
+            print(f"Top Card: 8 ({self.play_deck})", " ACTIVE")
         else:
             print(f"Top Card: {Shit_Player.uncard(self.top_card)} ({self.play_deck})")
         print("Draw Pile Height:", self.draw_pile)
@@ -244,9 +209,12 @@ class Shit_Game:
             player.print()
         self.me.print()
         print(self.serv_msg or "")
+        if(self.me.done):
+            print("Congrats! You won!")
 
     def _print_lobbies(self, lobbies): # MM screen
-        if lobbies is None:
+        if not lobbies or len(lobbies) == 0:
+            print("No lobbies found")
             return
         print("n.\towner\tplayers")
         for i, lobby in enumerate(lobbies, start=1):
@@ -257,16 +225,12 @@ class Shit_Game:
     def _print_lobby(self): # LOBBY screen
         print("n.\tnick")
         for i, player in enumerate(self.players.keys(), start=1):
-            print(f"{i}.\t{player}", " (OWNER)" if i==0 else " (YOU)" if player==self.me.serv_nick else "")
+            print(f"{i}.\t{player}", " (OWNER)" if i==1 else " (YOU)" if player==self.me.serv_nick else "")
         print(self.serv_msg or "")
 
     def cache_player(self):
         with open(self.cache_name, "w") as f:
-            f.write(f"""
-            {self.me.nick}
-            {self.me.id}
-            {self.id}
-            """)
+            f.write(f"{self.me.nick}\n{self.me.id}\n{self.id}")
 
     def del_cache(self):
         try:
@@ -285,4 +249,12 @@ class Shit_Game:
 
 
 if __name__ == "__main__":
+    me = Shit_Me("nick", 0)
+    me.hand = [0,0,0,1,0,1,0,0,1,0,0,0,0]
+    me.face_up = [13,5,8]
+    me.trade([8,13,10])
+    print(me.face_up)
+
+    print(me.hand)
+    
     exit()

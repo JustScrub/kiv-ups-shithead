@@ -33,7 +33,8 @@ class Shit_Comm:
         self._quit_thread_cancel = threading.Event()
 
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._sock.settimeout(CLI_TO+1.0)
+        self._sock.settimeout(5*(CLI_TO+3.0)) # longer than server timeout
+        print(f"Trying to contact server at {serv_info[0]}:{serv_info[1]}...")
         self._sock.connect(serv_info)
         nlen, pid = self.handlers["MAIN MENU"](self._sock, nick)
 
@@ -66,6 +67,7 @@ class Shit_Comm:
 
     def _quit_thread_task(self):
         while True:
+            self.game.print()
             try:
                 inp, to = timedInput("", 1, False)
             except Exception:
@@ -97,10 +99,12 @@ class Shit_Comm:
     def sendall(self, msg):
         self._sock.sendall((msg+"\x0A").encode())
 
+    SHIT_PATIENCE = 2
+
     def comm_loop(self):
         inp = ""
         ret = None
-        shit_patience = 5 
+        shit_patience = self.SHIT_PATIENCE
         def handle_quit():
             self.sendall("QUIT")
             self.game.del_cache()
@@ -129,28 +133,30 @@ class Shit_Comm:
 
             if self.quit():
                 if handle_quit(): return
-                shit_patience = 5
+                shit_patience = self.SHIT_PATIENCE
                 continue
             self.sendall("ACKN")
 
             try:
                 ret = self.handlers[inp[0]](self.game, inp[1:])
             except Exception as e:
-                print(e)
+                #self.game.serv_msg = "Error: " + str(e)
+                self.game.print()
                 shit_patience -= 1
             else:
                 if ret is not None:
                     if ret[0] == "QUIT":
                         if handle_quit(): return
-                        shit_patience = 5
+                        shit_patience = self.SHIT_PATIENCE
                         continue
                     self.sendall("^".join(ret))
-                shit_patience = 5
+                shit_patience = self.SHIT_PATIENCE
 
         raise Exception("Server is not responding")
 
 
 def main():
+
     # handle args - ip and port
     ip, port = "127.0.0.1", 4444
     if len(sys.argv) < 3:
@@ -182,27 +188,39 @@ def main():
         #ask for nick, max len = 12
         print()
         nick = input("Enter your nick: ")
-        while len(nick) > 12:
+        while len(nick) > 12 and len(nick) < 3:
             clear()
-            print("Nick too long")
+            print("Nick too long or short. Max 12, min 3.")
             nick = input("Enter your nick: ")
 
-    try:
-        gm = Shit_Comm(nick, (ip, port), recon)
-    except:
-        clear()
-        print("Connection error")
-        exit(1)
+    conn_patience = 5
+    while(conn_patience > 0):
+        try:
+            #recon = os.path.exists(Shit_Game.cache_name)
+            gm = Shit_Comm(nick, (ip, port), recon)
+        except Exception as e:
+            clear()
+            print("Connection error, retry:", 5-conn_patience)
+            time.sleep(1)
+            recon = True
+            conn_patience -= 1
+            continue
 
-    try:
-        gm.comm_loop()
-    except Exception as e:
-        print(e)
-        time.sleep(1)
-    gm.end()
-    del gm
+        try:
+            gm.comm_loop()
+        except Exception as e:
+            print(e)
+            time.sleep(1)
+            gm.end()
+            del gm
+            conn_patience -= 1
+            continue
+        else:
+            break
+
     if platform.system() == "Linux":
         os.system("reset")
+
     print("Bye")
     exit()
 

@@ -86,6 +86,7 @@ comm_flag_t shit_req_send(int cd,server_request_t request, void *data, int dlen)
     {
         case COMM_IGN:
             if(request == SRRQ_LOBBY_START) return COMM_IGN;
+            if(request == SRRQ_MM_CHOICE) return COMM_IGN;
             if(TO_cnt++ > RETRY_CNT) { break; }
             goto send;
         case COMM_TO:
@@ -203,6 +204,7 @@ comm_flag_t send_TRADE_NOW(int cd, char *bfr, void *data)
     if(ret != COMM_OK) return ret;
 
     ret = read(cd, bfr, BFR_LEN);
+    printD("send_TRADE_NOW read: bfr=%s,ret=%d\n", bfr, ret);
     to_dis_handle(ret);
     quit_handle(bfr);
     ignore_handle(bfr);
@@ -367,6 +369,7 @@ comm_flag_t send_LOBBY_STATE(int cd, char *bfr, void *data)
     }
     strncat(bfr, "\x0A", 2);
     int ret = write(cd, bfr, strlen(bfr));
+    printD("send_LOBBY_STATE: %s\n", bfr);
     to_dis_handle(ret);
     if(ret < strlen(bfr)) return COMM_TO;
 
@@ -380,7 +383,7 @@ comm_flag_t send_LOBBIES(int cd, char *bfr, void *data)
     int len = sprintf(bfr, "LOBBIES");
     for(;g->gid;g++)
     {
-        len += snprintf(bfr+len,BFR_LEN-len, "^%s:%d",g->owner_nick, g->pl_cnt);
+        len += snprintf(bfr+len,BFR_LEN-len, "^%s`%d",g->owner_nick, g->pl_cnt);
     }
     strncat(bfr, "\x0A", 2);
     int ret = write(cd, bfr, strlen(bfr));
@@ -428,23 +431,24 @@ comm_flag_t send_GAME_STATE(int cd, char *bfr, void *data)
         len += snprintf(bfr+len, BFR_LEN-len, "^%s", g->players[i]->nick);
         if(cd != g->players[i]->comm_if.cd)
         {
-            len += snprintf(bfr+len, BFR_LEN-len, ":%d", player_hand_card_cnt(g->players[i]));
+            len += snprintf(bfr+len, BFR_LEN-len, "`%d", player_hand_card_cnt(g->players[i]));
         }
         else
         {
-            (bfr+len++)[0] = ':';
+            (bfr+len++)[0] = '`';
             len += hmask(g->players[i], bfr+len, BFR_LEN-len);
         }
-        (bfr+len++)[0] = ':';
+        (bfr+len++)[0] = '`';
         len += fmask(g->players[i], bfr+len);
-        (bfr+len++)[0] = ':';
+        (bfr+len++)[0] = '`';
         len += dmask(g->players[i], bfr+len);
  
     }
-    len += snprintf(bfr+len, BFR_LEN-len, "^%d:%d:%d\x0A", 
+    len += snprintf(bfr+len, BFR_LEN-len, "^%d`%d`%d\x0A", 
                             game_get_top_card(g) + 10*g->active_8, 
                             card_stack_height(g->play_deck), 
                             card_stack_height(g->draw_deck));
+    printD("send_GAME_STATE: %s\n", bfr);
     int ret = write(cd, bfr, len);
     write_check(ret);
     if(ret < strlen(bfr)) return COMM_TO;

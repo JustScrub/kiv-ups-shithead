@@ -1,6 +1,7 @@
 #include "include/card.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 /*
 void print_card(card_t card)
@@ -62,7 +63,19 @@ int card_stack_height(card_stack_t *stack)
 
 void card_stack_shuffle(card_stack_t *stack)
 {
-    return;
+    srand ( time(NULL) );
+    // Start from the last card and swap one by one. We don't
+    // need to run for the first card that's why i > 0
+    for (int i = stack->head-1; i > 0; i--)
+    {
+        // Pick a random index from 0 to i
+        int j = rand() % (i+1);
+ 
+        // Swap with the element at random index
+        card_t tmp = stack->deck[i];
+        stack->deck[i] = stack->deck[j];
+        stack->deck[j] = tmp;
+    }
 }
 
 void card_stack_clear(card_stack_t *stack)

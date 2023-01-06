@@ -55,13 +55,13 @@ card_t game_get_top_card(game_t *game);
  * Illegal:
  *  - Player does not have the card(s).
  *  - active 8, but player did not play 8
- *  - if player does not have 2, 3 or 10:
- *      - if top card is 7 and player played higher card
+ *  - iff player does not have 2, 3 or 10 and:
+ *      - top card is 7 and player played higher card
  *      - top card != 7 and player played lower card
  * 
  * return values:
  * 0=legal
- * 1=played from hand or face-up (player was idiot)
+ * 1=player could have known (was idiot)
  * 2=played form face-down (player did not know)
  * 
  * @param game 

@@ -18,6 +18,7 @@
 #include <sys/time.h>
 #include <stdint.h>
 #include <signal.h>
+#include <stdio.h>
 
 #define bzero(b,len) (memset((b), '\0', (len)), (void) 0)
 
@@ -43,8 +44,7 @@ int get_lobby_games(lobby_info_t **lobbies)
     int cnt = 0;
     for(int i=0; i<MAX_GAMES; i++)
     {
-        if(games[i] && games[i]->state==GM_LOBBY) {
-            printD("get_lobbies: found lobby %d\n", games[i]->id);
+        if(games[i] && games[i]->state==GM_LOBBY && games[i]->players[0]) {
             cnt++;
         }
     }
@@ -52,13 +52,14 @@ int get_lobby_games(lobby_info_t **lobbies)
     *lobbies = calloc(cnt+1,sizeof(lobby_info_t));
     if(!*lobbies) {pthread_mutex_unlock(&gm_mutex); return -1;}
     if(!cnt) {pthread_mutex_unlock(&gm_mutex); return 1;}
+    printD("get_lobbies: found %d lobbies\n", cnt);
     cnt=0;
 
     for(int i=0; i<MAX_GAMES; i++)
     {
-        if(!games[i] || games[i]->state!=GM_LOBBY) continue;
+        if(!games[i] || games[i]->state!=GM_LOBBY || !games[i]->players[0]) continue;
         (*lobbies)[cnt].pl_cnt = game_player_count(games[i]);
-        strncpy((*lobbies)[cnt].owner_nick, games[i]->players[0], NIC_LEN);
+        strncpy((*lobbies)[cnt].owner_nick, games[i]->players[0]->nick, NIC_LEN);
         (*lobbies)[cnt].gid = games[i]->id;
         cnt++;
     }
@@ -101,13 +102,20 @@ char check_recon_cache(recon_cache_t *cache, int *i)
 void *mm_player_thread(void *arg)
 {
     pthread_detach(pthread_self());
-    int i; int64_t choice; int idx;
+    int i; int64_t choice; int idx = -1;
     lobby_info_t *lobbies = malloc(sizeof(lobby_info_t)); // just to free it in the first mm_win pass
     player_t *pl = (player_t *)arg;
     comm_flag_t ret; pthread_t tid;
 
     if(!pl) pthread_exit(NULL);
-    if(*pl->nick) goto mm_win;
+    pl->state = PL_MAIN_MENU;
+    if(*pl->nick) {
+        printD("Return to MM: %s\n",pl->nick);
+        for(idx=0; idx<MAX_PLAYERS*MAX_GAMES; idx++)
+            if(players[idx] && players[idx]->id == pl->id) break;
+        if(idx == MAX_PLAYERS*MAX_GAMES) goto player_exit;
+        goto mm_win;
+    }
 
     pthread_mutex_lock(&pl_mutex);
     for(idx=0;players[idx];idx++);
@@ -117,6 +125,7 @@ void *mm_player_thread(void *arg)
     *((int *)pl->nick) = pl->id;
     ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_MAIN_MENU, &pl->nick, NIC_LEN);
     if(ret != COMM_OK) goto player_exit;
+    printD("New player: %s\n", pl->nick);
 
     mm_win:
     free(lobbies);
@@ -192,7 +201,7 @@ void *mm_player_thread(void *arg)
         for(choice = 0; choice<MAX_GAMES; choice++){
             if(games[choice]->id == (unsigned)i) break;
         }
-        if(choice == MAX_GAMES || games[choice]->state == GM_FINISHED) 
+        if(choice == MAX_GAMES || games[choice]->state != GM_PLAYING) 
         { 
             ret = pl->comm_if.send_request(pl->comm_if.cd, SRRQ_RECON, "F", 1);
             pthread_mutex_unlock(&gm_mutex);
@@ -232,38 +241,52 @@ void *mm_player_thread(void *arg)
         pthread_exit(NULL);
 
     player_exit:
-        printD("mm player_exit: ret=%d\n", ret);
         //free(players[idx]); players[idx] = NULL;
-        pthread_mutex_lock(&pl_mutex);
-        players[idx] = NULL;
-        pthread_mutex_unlock(&pl_mutex);
+        if(idx >= 0 && idx < MAX_PLAYERS*MAX_GAMES){
+            pthread_mutex_lock(&pl_mutex);
+            players[idx] = NULL;
+            pthread_mutex_unlock(&pl_mutex);
+        }
+        printD("mm player_exit: nick=%s,idx=%d,ret=%d\n", pl->nick,idx, ret);
+        if(pl->comm_if.conn_state != PL_CONN_DOWN) close(pl->comm_if.cd);
         free(pl);
         free(lobbies);
         pthread_exit(NULL);
 }
 
+/* pushes players from lobby or game to main menu */
 void *player_quitter(void *arg) {
     pthread_detach(pthread_self());
     player_t *pl = NULL; pthread_t tid;
+    unsigned plid = 0;
     while(1) {
-        if(queue_pop(&pl,Q_quiter)) {
-            printD("player_quitter: quit=%d\n", pl->id);
-            if(pl->comm_if.conn_state == PL_CONN_DOWN) {  // free disconnected players in lobby
-                if(pl->state != PL_LOBBY && pl->state != PL_LOBBY_OWNER) continue;
+        if(queue_pop(&plid,Q_quiter)) {
+            pl = NULL;
+            pthread_mutex_lock(&pl_mutex);
 
-                pthread_mutex_lock(&pl_mutex);
-                for(int i=0; i<MAX_PLAYERS*MAX_GAMES; i++)
-                    if(players[i] && players[i]->id == pl->id)
-                    {
-                        free(players[i]); players[i] = NULL;
-                        break;
-                    }
+            for(int i=0; i<MAX_PLAYERS*MAX_GAMES; i++)
+                if(players[i] && players[i]->id == plid) {
+                    plid = i;
+                    pl = players[i]; break;
+                }
+            if(!pl) { pthread_mutex_unlock(&pl_mutex); continue; }
+
+            printD("player_quitter: quit=%s\n", pl->nick);
+            if(pl->state == PL_MAIN_MENU)  // already quit
+                {pthread_mutex_unlock(&pl_mutex);continue;}
+            if(pl->comm_if.conn_state == PL_CONN_DOWN) {  // free disconnected players in lobby
+                if(pl->state != PL_LOBBY && pl->state != PL_LOBBY_OWNER) 
+                    {pthread_mutex_unlock(&pl_mutex);continue;}
+
+                printD("player_quitter: free disconnected lobby player=%s\n", pl->nick);
+                free(players[plid]); players[plid] = NULL;
                 pthread_mutex_unlock(&pl_mutex);
                 continue;
             }
             player_clear(pl);
             pthread_create(&tid,NULL,mm_player_thread,pl);
-            pl = NULL;
+            pthread_mutex_unlock(&pl_mutex);
+            printD("player_quitter: quit=%s done\n", pl->nick);
         }
         else sleep(1);
     }
@@ -275,28 +298,34 @@ void *game_deleter(void *arg)
     pthread_detach(pthread_self());
     unsigned gm;
     while(1) {
+        //sleep(1);
+        //continue;
         if(queue_pop(&gm,Q_game_del)) {
             printD("game_deleter: delete=%d\n", gm);
-            pthread_mutex_lock(&pl_mutex);
-            for(int i=0; i<MAX_PLAYERS*MAX_GAMES; i++)
-                if(players[i] && players[i]->game_id == gm)
-                {
-                    if(players[i]->comm_if.conn_state == PL_CONN_UP)
-                        queue_push(players+i,Q_quiter); // quit any players still in the game (somehow)
-                    else
-                        { free(players[i]); players[i] = NULL; }
-                }
-            pthread_mutex_unlock(&pl_mutex);
-
             pthread_mutex_lock(&gm_mutex);
             for(int i=0; i<MAX_GAMES; i++)
                 if(games[i] && games[i]->id == gm)
                 {
+                    for(int j=0; j<MAX_PLAYERS; j++)
+                        if(games[i]->players[j] && games[i]->players[j]->comm_if.conn_state == PL_CONN_UP)
+                            queue_push(&games[i]->players[j]->id, Q_quiter);
+
                     game_delete(games[i]);
                     games[i] = NULL;
                     break;
                 }
             pthread_mutex_unlock(&gm_mutex);
+
+            pthread_mutex_lock(&pl_mutex);
+            for(int i=0; i<MAX_PLAYERS*MAX_GAMES; i++)
+                if(players[i] && players[i]->game_id == gm)
+                {
+                    if(players[i]->comm_if.conn_state == PL_CONN_DOWN)
+                        { free(players[i]); players[i] = NULL; }
+                }
+            pthread_mutex_unlock(&pl_mutex);
+
+            printD("game_deleter: delete=%d done\n", gm);
         }
         else sleep(1);
     }

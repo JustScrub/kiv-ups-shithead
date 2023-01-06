@@ -42,7 +42,7 @@ bool player_has_card(player_t *player, card_t card, int cnt)
     else if(from == PL_PILE_F_UP)
         for(i = 0; i < 3; i++) real_cnt +=   player->face_up[i] == card;
     else 
-        for(i = 0; i < 3; i++) real_cnt += player->face_down[i] == card;
+        return card_is_valid(player->face_down[cnt]);
 
     return real_cnt >= cnt;  // has at least the required amount of the cards
 }
@@ -70,7 +70,15 @@ bool player_play_cards(player_t *player, card_t card, int cnt, card_stack_t *pla
         // even if has 4 times the card, but 3 in hand and 1 on face up, they can play only 3 from hand
         // and wait for the next turn to play the last one from face up
 
-    int from = player_plays_from(player);
+    int from;
+    if((from = player_plays_from(player)) == PL_PILE_F_DWN)
+    {
+        if(cnt < 0 || cnt > 2) return false;
+        card = player->face_down[(cnt)];
+        player->face_down[cnt] = INVALID_CARD;
+        card_stack_push(play_deck, card);
+        return true;
+    }
     
     for(; cnt>0; cnt--)
     {
@@ -89,17 +97,9 @@ bool player_play_cards(player_t *player, card_t card, int cnt, card_stack_t *pla
                 }
             }
         }
-        if(from == PL_PILE_F_DWN)
-        {
-            for(int i=0;i<3;i++)
-            {
-                if(player->face_down[i] == card) player->face_down[i] = INVALID_CARD;
-            }
-        }
-        
         card_stack_push(play_deck, card);
     }
-    return 0;
+    return true;
 }
 
 bool player_draw_cards(player_t *player, int cnt, card_stack_t *draw_deck)

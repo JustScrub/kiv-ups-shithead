@@ -3,6 +3,7 @@
 
 //#include "game.h"
 //#include "player.h"
+#include "config.h"
 
 typedef enum {
     PL_CONN_DOWN = 0,

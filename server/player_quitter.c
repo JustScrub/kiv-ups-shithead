@@ -8,7 +8,7 @@
 queue_t glob_queues[] = {
     [Q_quiter] = {
         .data = NULL,
-        .element_size = sizeof(player_t *),
+        .element_size = sizeof(unsigned),
         .size = MAX_PLAYERS*MAX_GAMES,
         .start = 0,
         .cnt = 0
