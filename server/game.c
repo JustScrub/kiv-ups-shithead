@@ -13,9 +13,11 @@
 #define RIG_BURN_END 0
 #define RIG_SAME_CARDS 0 // change to value of the card - so 2 to 14 (0 is no rig)
 #define RIG_HALF_DECK 1
-#define RIG_NO_TRADING 0
+#define RIG_NO_TRADING 1
 #define RIG_NO_SHUFFLE 0
 #define RIG_ALL_LEGAL 0
+#define RIG_FDOWN_ONLY 0
+#define RIG_NO_DRAW 0
 
 static unsigned int gm_id = 0;
 
@@ -161,6 +163,7 @@ void game_init(game_t *game)
         }
     }
 
+    #if !RIG_FDOWN_ONLY
     for(int p=0; p <MAX_PLAYERS; p++)
         {
             if(game->players[p])
@@ -168,7 +171,15 @@ void game_init(game_t *game)
                 player_draw_cards(game->players[p],3,game->draw_deck);
             }
         }
-
+    #else
+    for(int p=0; p <MAX_PLAYERS; p++)
+        {
+            if(game->players[p])
+            {
+                memset(game->players[p]->face_up, INVALID_CARD, 3*sizeof(card_t));
+            }
+        }
+    #endif
     game->active_8 = false;
 }
 
@@ -388,6 +399,7 @@ void game_loop(game_t *game)
         if(reason) // pl sent idx of card in face-down pile
         {
             card = player->face_down[(j=card)]; // card is now the card, j is the idx
+            printD("Player %s played face-down card %d on idx %d\n", player->nick, card,j);
         }
         if((reason=game_check_illegal(game, player, card,j)))
         {
@@ -437,9 +449,11 @@ void game_loop(game_t *game)
             goto legal_check; // plays again
         }
 
+        #if !RIG_NO_DRAW && !RIG_FDOWN_ONLY
         // draw cards
         j = player_hand_card_cnt(player);
         player_draw_cards(player, 3-j, game->draw_deck);
+        #endif
 
         if(!player_plays_from(player))
         {
@@ -465,7 +479,7 @@ void game_loop(game_t *game)
             snprintf(outstr, 25, "SHITHEAD: %s", game->players[j]->nick);
             game->players[j]->state = PL_DONE;
             game_send_all(game, SRRQ_WRITE, outstr, 25);
-            sleep(1);
+            sleep(5);
             break;
         }
     }
@@ -519,7 +533,7 @@ void *game_thread(void *arg)
     game->state = GM_LOBBY;
     for(int lobby_idle = 0;; lobby_idle++)
     {
-        if(lobby_idle > 30) //30!!
+        if(lobby_idle > 30)
         {
             //log error
             goto lobby_owner_quit;
@@ -538,6 +552,9 @@ void *game_thread(void *arg)
         }
 
         if(game_player_count(game) < 2) continue;
+        ret = game_comm(game, 0, SRRQ_LOBBY_STATE, game, sizeof(game_t *));
+        if(ret != COMM_OK) goto lobby_owner_quit;
+
         // wait for owner to start the game
         game_comm(game, 0, SRRQ_LOBBY_START, s, 1);
         if(ret != COMM_OK && ret != COMM_IGN) goto lobby_owner_quit;
@@ -555,7 +572,7 @@ void *game_thread(void *arg)
 
     free(s);
     game->state = GM_PREPARE;
-    game_send_all(game, SRRQ_WRITE, "GAME STRATS", sizeof("GAME STRATS"));
+    game_send_all(game, SRRQ_WRITE, "GAME STARTS", sizeof("GAME STRATS"));
     game_init(game);
     game_loop(game);
     game_send_all(game, SRRQ_WRITE, "GAME ENDS", sizeof("GAME ENDS"));

@@ -33,16 +33,15 @@ bool player_has_card(player_t *player, card_t card, int cnt)
 {
     int real_cnt = 0;
     int i;
-    if(cnt <= 0 || !card_is_valid(card)) return false; 
     int from = player_plays_from(player);
     if(from == PL_PILE_NONE) return false;
+    if(from == PL_PILE_F_DWN) return card_is_valid(player->face_down[cnt]);
 
+    if(cnt <= 0 || !card_is_valid(card)) return false; 
     if(from == PL_PILE_HAND)
         real_cnt = player->hand[card-2];
-    else if(from == PL_PILE_F_UP)
+    else // from == PL_PILE_F_UP
         for(i = 0; i < 3; i++) real_cnt +=   player->face_up[i] == card;
-    else 
-        return card_is_valid(player->face_down[cnt]);
 
     return real_cnt >= cnt;  // has at least the required amount of the cards
 }

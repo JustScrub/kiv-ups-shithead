@@ -157,6 +157,8 @@ class Shit_Comm:
 
 def main():
 
+    if platform.system() == "Windows":
+        os.system('color')
     # handle args - ip and port
     ip, port = "127.0.0.1", 4444
     if len(sys.argv) < 3:

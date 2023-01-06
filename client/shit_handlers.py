@@ -117,7 +117,7 @@ def handle_lobbies( game, inp):
         game.del_cache()
     game.state = sc.Shit_State.MAIN_MENU
     game.lobbies = [x.split("`") for x in inp]
-    print([x.split("`") for x in inp])
+    #print([x.split("`") for x in inp])
     game.print()
     return None
 
@@ -140,7 +140,7 @@ def handle_game_state( game, inp):
     game.state = sc.Shit_State.PLAYING_WAITING if game.state != sc.Shit_State.PLAYING_DONE else sc.Shit_State.PLAYING_DONE
     plinfos = inp[:-1]
     plinfos = {x.split('`')[0]: x.split('`')[1:] for x in plinfos}
-    print(plinfos)
+    #print(plinfos)
     if game.me.serv_nick not in plinfos.keys():
         raise ValueError("Self not in player list")
     game.me.face_up = mask_str2tuple(plinfos[game.me.serv_nick][1])
@@ -168,7 +168,7 @@ def handle_game_state( game, inp):
     infos = inp[-1].split("`")
     game.top_card = int(infos[0])
     game.play_deck = int(infos[1])
-    game.draw_deck = int(infos[2])
+    game.draw_pile = int(infos[2])
 
     game.print()
 
@@ -272,9 +272,9 @@ def handle_gimme_card( game, inp):
         game.me.play_cards(card, cnt)
 
         ret[0] = _card_names[ret[0]]
-        return ("CARD", *ret)
+        return ["CARD", *ret]
 
-    while game.me.play_from == "face_down":
+    while game.me.play_from == "face down":
         game.print()
         ret, to = inputto("Gimme card (position of face-down): ", till)
         if to:
@@ -286,6 +286,12 @@ def handle_gimme_card( game, inp):
             game.serv_msg = "Invalid input"
             game.print()
             continue
+        try:
+            ret[0] = int(ret[0])
+        except ValueError:
+            game.serv_msg = "Position must be a number"
+            game.print()
+            continue
         if ret[0] not in {1, 2, 3}:
             game.serv_msg = "Allowed positions are 1, 2 and 3"
             game.print()
@@ -294,6 +300,8 @@ def handle_gimme_card( game, inp):
             game.serv_msg = "This position is empty"
             game.print()
             continue
+
+        return ["CARD", str(ret[0]-1), "1"]
 
 if __name__ == "__main__":
     game = sc.Shit_Game(sc.Shit_Me("test",0))
