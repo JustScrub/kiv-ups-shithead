@@ -75,7 +75,7 @@ int player_plays_from(player_t *player);
  * @return true 
  * @return false 
  */
-bool player_play_cards(player_t *player, card_t card, int cnt, card_stack_t *play_deck);
+card_t player_play_cards(player_t *player, card_t card, int cnt, card_stack_t *play_deck);
 bool player_draw_cards(player_t *player, int cnt, card_stack_t *draw_deck);
 char player_secret_face_down(player_t *player);
 void player_put_to_hand(player_t *player, int f_down_idx);
