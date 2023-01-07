@@ -101,7 +101,9 @@ class Shit_Comm:
 
     SHIT_PATIENCE = 2
 
-    def comm_loop(self):
+    def comm_loop(self, blackout=False):
+        if blackout:
+            import random as rnd
         inp = ""
         ret = None
         shit_patience = self.SHIT_PATIENCE
@@ -128,6 +130,9 @@ class Shit_Comm:
                 print("Unknown command:", inp[0])
                 shit_patience -= 1
                 continue
+
+            if blackout and rnd.random() < 0.1:
+                raise Exception("Blackout")
             
             self._quit_thread_ctrl(False)
 
@@ -155,13 +160,45 @@ class Shit_Comm:
         raise Exception("Server is not responding")
 
 
+def connect(nick, serv_info, recon):
+    conn_patience = 5
+    while(conn_patience > 0):
+        try:
+            recon = os.path.exists(Shit_Game.cache_name)
+            gm = Shit_Comm(nick, serv_info , recon)
+        except Exception as e:
+            clear()
+            print("Connection error, retry:", 5-conn_patience)
+            time.sleep(1)
+            recon = True
+            conn_patience -= 1
+            continue
+        else:
+            return gm
+    return None
+
+def communicate(gm, blackout):
+    comm_patience = 5
+    while comm_patience > 0:
+        try:
+            gm.comm_loop(blackout)
+        except Exception as e:
+            print(e)
+            time.sleep(1)
+            gm.end()
+            comm_patience -= 1
+            continue
+        else:
+            return True
+    return False
+
 def main():
 
     if platform.system() == "Windows":
         os.system('color')
     # handle args - ip and port
     ip, port = "127.0.0.1", 4444
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 3 or len(sys.argv) > 4:
         print("Usage: python", sys.argv[0], "<ip> <port>")
         print("Defaulting to localhost:4444")
         time.sleep(1)
@@ -182,6 +219,7 @@ def main():
             nick = Shit_Game.get_cache()[0]
             y = input(f"Found cache. Do you want to reconnect as {nick}? (y/n) ")
             recon = (y.lower() == "y")
+            #print("Reconnect:", recon)
             if not recon: os.remove(Shit_Game.cache_name)
         except ValueError:
             os.remove(Shit_Game.cache_name)
@@ -190,35 +228,20 @@ def main():
         #ask for nick, max len = 12
         print()
         nick = input("Enter your nick: ")
-        while len(nick) > 12 and len(nick) < 3:
+        while len(nick) > 11 and len(nick) < 3:
             clear()
-            print("Nick too long or short. Max 12, min 3.")
+            print("Nick too long or short. Max 11, min 3.")
             nick = input("Enter your nick: ")
 
-    conn_patience = 5
-    while(conn_patience > 0):
-        try:
-            #recon = os.path.exists(Shit_Game.cache_name)
-            gm = Shit_Comm(nick, (ip, port), recon)
-        except Exception as e:
-            clear()
-            print("Connection error, retry:", 5-conn_patience)
-            time.sleep(1)
-            recon = True
-            conn_patience -= 1
-            continue
-
-        try:
-            gm.comm_loop()
-        except Exception as e:
-            print(e)
-            time.sleep(1)
-            gm.end()
-            del gm
-            conn_patience -= 1
-            continue
-        else:
+    blackout = len(sys.argv) == 4 and sys.argv[3] == "BL"
+    while 1:
+        gm = connect(nick, (ip, port), recon)
+        if gm is None:
+            print("Connection failed")
             break
+        if communicate(gm, blackout):
+            break
+    gm.end()
 
     if platform.system() == "Linux":
         os.system("reset")

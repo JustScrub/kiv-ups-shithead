@@ -15,6 +15,7 @@ typedef struct {
    unsigned id;
    unsigned gid;
 } recon_cache_t;
+//int A = sizeof(recon_cache_t);
 
 typedef struct {
     char owner_nick[NIC_LEN+1];

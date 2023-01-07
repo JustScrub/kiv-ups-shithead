@@ -60,7 +60,13 @@ bool game_add_player(game_t *game,player_t *pl)
         pl->game_id = game->id;
         game->players[i] = pl;
         if(pl->state != PL_MAIN_MENU){
-            game_comm(game, i, SRRQ_RECON, "R", 1);
+            char *bfr = malloc(sizeof(char) + sizeof(recon_cache_t));
+            *bfr = 'R';
+            recon_cache_t rc = { .id = pl->id, .gid = game->id};
+            strcpy(rc.nick, pl->nick);
+            memcpy(bfr+1, &rc, sizeof(recon_cache_t));
+            game_comm(game, i, SRRQ_RECON, bfr, 1+sizeof(recon_cache_t));
+            game_comm(game, i, SRRQ_GAME_STATE, game, sizeof(game_t));
             pl->comm_if.conn_state = PL_CONN_UP;
         }
         pl->state = game->state == GM_LOBBY? PL_LOBBY : PL_PLAYING_WAITING;

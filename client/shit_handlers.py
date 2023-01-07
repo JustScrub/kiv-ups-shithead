@@ -32,21 +32,24 @@ def handle_main_menu(sock: socket, nick):
 
 def handle_mm_choice( game, inp):
     if game.me.recon:
-        cache = None
-        try:
-            cache = game.get_cache()
-        except Exception:
+        cache = sc.Shit_Game.get_cache()
+        if not cache:
             game.serv_msg = "Could not read cache"
             game.print()
+            #exit(0)
             game.me.recon = False
             game.del_cache()
             return ["IGNR"]
 
-        return ["RECON", *cache]
-    game.serv_msg = ""
+        #game.me.recon = False
+        return ["RECON", *tuple(map(str, cache))]
+    #game.serv_msg = ""
 
     till = datetime.now() + timedelta(seconds=CLI_TO)
+    rcache = sc.Shit_Game.get_cache()
     while 1:
+        if rcache: 
+            game.serv_msg = "Cache found. Would you like to reconnect? (Y/y) "
         game.print()
         ret, to = inputto("Lobby number to connect to or N/n for new lobby: ", till)
         if to:
@@ -70,22 +73,22 @@ def handle_recon( game, inp):
     if not inp[0] in ["I", "F", "R"]:
         raise ValueError(f"Invalid recon data: {inp[0]}")
     if inp[0] == "I":
-        game.serv_msg = "Server rejected cache."
+        game.serv_msg +="\nServer rejected cache. You may try again (after a while)."
         game.print()
         game.me.recon = False
-        game.del_cache()
 
     elif inp[0] == "F":
         game.serv_msg = "Old game finished. Choose new lobby."
         game.print()
-        game.me.recon = False
         game.del_cache()
+        game.me.recon = False
 
     elif inp[0] == "R":
         game.state = sc.Shit_State.PLAYING_WAITING
-        game.serv_msg = "Reconnected to lobby."
+        game.serv_msg = "Reconnected to game."
         game.print()
         game.me.recon = False
+        game.me.serv_nick, game.me.id, game.id = inp[1], int(inp[2]), int(inp[3])
         game.cache_player()
 
     return None
@@ -115,6 +118,7 @@ def handle_lobbies( game, inp):
     game.clear()
     if game.state.name.startswith("PLAYING"):
         game.del_cache()
+        game.serv_msg = ""
     game.state = sc.Shit_State.MAIN_MENU
     game.lobbies = [x.split("`") for x in inp]
     #print([x.split("`") for x in inp])
@@ -125,6 +129,7 @@ def handle_lobby_state( game, inp):
     game.state = sc.Shit_State.LOBBY if game.state != sc.Shit_State.LOBBY_OWNER else sc.Shit_State.LOBBY_OWNER
     game.id = int(inp[0])
     game.players = {x: None for x in inp[1:]}
+    game.serv_msg = ""
     game.print()
     #try:
     #    game.players.pop(game.me.serv_nick)
@@ -137,6 +142,7 @@ def handle_game_state( game, inp):
     if not game.state.name.startswith("PLAYING"):
         game.cache_player()
         game.clear()
+        #game.me.recon = False
     game.state = sc.Shit_State.PLAYING_WAITING if game.state != sc.Shit_State.PLAYING_DONE else sc.Shit_State.PLAYING_DONE
     plinfos = inp[:-1]
     plinfos = {x.split('`')[0]: x.split('`')[1:] for x in plinfos}

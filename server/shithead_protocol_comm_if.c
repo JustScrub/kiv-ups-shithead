@@ -350,7 +350,15 @@ comm_flag_t send_GIMME_CARD(int cd, char *bfr, void *data)
 
 comm_flag_t send_RECON(int cd, char *bfr, void *data)
 {
-    sprintf(bfr, "RECON^%c\x0A", *(char *)data);
+    if(*(char *)data == 'R')
+    {
+        data = (char *)data+1; // past the 'R'
+        sprintf(bfr, "RECON^R^%s^%d^%d\x0A", ((recon_cache_t*)data)->nick,
+            ((recon_cache_t*)data)->id, ((recon_cache_t*)data)->gid);
+    }
+    else
+        sprintf(bfr, "RECON^%c\x0A", *(char *)data);
+    printD("send_RECON: bfr=%s\n", bfr);
     int ret = write(cd, bfr, strlen(bfr));
     write_check(ret);
     if(ret < strlen(bfr)) return COMM_TO;

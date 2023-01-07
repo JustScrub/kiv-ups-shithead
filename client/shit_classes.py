@@ -132,7 +132,7 @@ class Shit_Me(Shit_Player):
 
         self.on_turn = False
         self.done = False
-        self.recon = False
+        #self.recon = False
 
     def trade(self, cards):
         for i in range(3):
@@ -272,6 +272,7 @@ class Shit_Game:
     def _print_lobbies(self, lobbies): # MM screen
         if not lobbies or len(lobbies) == 0:
             print("No lobbies found")
+            print(self.serv_msg or "")
             return
         print("n.\towner\tplayers")
         for i, lobby in enumerate(lobbies, start=1):
@@ -298,12 +299,14 @@ class Shit_Game:
             pass
 
     def get_cache():
+        if not os.path.exists(Shit_Game.cache_name):
+            return None
         with open(Shit_Game.cache_name, "r") as f:
             nick, id, game_id = f.read().split()
             try: 
                 return (nick, int(id), int(game_id))
             except:
-                raise ValueError("Invalid cache file")
+                return None
 
 
 
