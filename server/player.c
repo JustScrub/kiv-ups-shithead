@@ -61,10 +61,10 @@ int player_plays_from(player_t *player)
 
 }
 
-bool player_play_cards(player_t *player, card_t card, int cnt, card_stack_t *play_deck)
+card_t player_play_cards(player_t *player, card_t card, int cnt, card_stack_t *play_deck)
 {
     printD("play cards: %s %d %d\n", player->nick, card, cnt);
-    if(!player_has_card(player, card, cnt)) {printD("play cards: does not have\n");return false;}
+    if(!player_has_card(player, card, cnt)) {printD("play cards: does not have\n");return 0;}
     // this if is outside the for loop =>
         // even if has 4 times the card, but 3 in hand and 1 on face up, they can play only 3 from hand
         // and wait for the next turn to play the last one from face up
@@ -72,11 +72,11 @@ bool player_play_cards(player_t *player, card_t card, int cnt, card_stack_t *pla
     int from;
     if((from = player_plays_from(player)) == PL_PILE_F_DWN)
     {
-        if(cnt < 0 || cnt > 2) return false;
+        if(cnt < 0 || cnt > 2) return 0;
         card = player->face_down[(cnt)];
         player->face_down[cnt] = INVALID_CARD;
         card_stack_push(play_deck, card);
-        return true;
+        return card;
     }
     
     for(; cnt>0; cnt--)
@@ -98,7 +98,7 @@ bool player_play_cards(player_t *player, card_t card, int cnt, card_stack_t *pla
         }
         card_stack_push(play_deck, card);
     }
-    return true;
+    return card;
 }
 
 bool player_draw_cards(player_t *player, int cnt, card_stack_t *draw_deck)

@@ -12,8 +12,8 @@
 
 #define RIG_BURN_END 0
 #define RIG_SAME_CARDS 0 // change to value of the card - so 2 to 14 (0 is no rig)
-#define RIG_HALF_DECK 1
-#define RIG_NO_TRADING 1
+#define RIG_HALF_DECK 0
+#define RIG_NO_TRADING 0
 #define RIG_NO_SHUFFLE 0
 #define RIG_ALL_LEGAL 0
 #define RIG_FDOWN_ONLY 0
@@ -436,9 +436,8 @@ void game_loop(game_t *game)
         }
 
         // Play the player's cards
-        player_play_cards(player, card, j, game->play_deck);
         // check for 8 or pile burn
-        if(game_get_top_card(game) == 8)
+        if(player_play_cards(player, card, j, game->play_deck) == 8)
         {
             game->active_8 = true;
         }

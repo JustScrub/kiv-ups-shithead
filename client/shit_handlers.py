@@ -13,7 +13,7 @@ def inputto(prompt, till):
     timeout = (till - datetime.now()).seconds
     if timeout < 1:
         return "", True
-    return timedInput(prompt, timeout, resetOnInput=False, allowCharacters="yYnN1234567890JQKA q")
+    return timedInput(prompt, timeout, resetOnInput=False, allowCharacters="yYnN1234567890JQKAjka q")
 
 def handle_main_menu(sock: socket, nick):
     inp = ""
@@ -255,6 +255,7 @@ def handle_gimme_card( game, inp):
             game.serv_msg = "Invalid input"
             game.print()
             continue
+        ret[0] = ret[0].upper()
         if ret[0] not in _card_names.keys():
             game.serv_msg = "Invalid card name"
             game.print()
