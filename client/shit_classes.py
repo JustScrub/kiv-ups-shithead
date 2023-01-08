@@ -199,6 +199,7 @@ class Shit_State(Enum):
     PLAYING_WAITING = 4
     PLAYING_ON_TURN = 5
     PLAYING_DONE = 6
+    RECON_WAIT = 7
 
 class Shit_Game:
     cache_name = "shit_cache"

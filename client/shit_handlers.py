@@ -42,6 +42,7 @@ def handle_mm_choice( game, inp):
             return ["IGNR"]
 
         #game.me.recon = False
+        game.state = sc.Shit_State.RECON_WAIT
         return ["RECON", *tuple(map(str, cache))]
     #game.serv_msg = ""
 
@@ -76,12 +77,14 @@ def handle_recon( game, inp):
         game.serv_msg +="\nServer rejected cache. You may try again (after a while)."
         game.print()
         game.me.recon = False
+        game.state = sc.Shit_State.MAIN_MENU
 
     elif inp[0] == "F":
         game.serv_msg = "Old game finished. Choose new lobby."
         game.print()
         game.del_cache()
         game.me.recon = False
+        game.state = sc.Shit_State.MAIN_MENU
 
     elif inp[0] == "R":
         game.state = sc.Shit_State.PLAYING_WAITING
@@ -152,6 +155,9 @@ def handle_game_state( game, inp):
     game.me.face_up = mask_str2tuple(plinfos[game.me.serv_nick][1])
     game.me.face_down = mask_str2tuple(plinfos[game.me.serv_nick][2])
     game.me.hand = list(map(lambda x: int(x), plinfos[game.me.serv_nick][0].split(',')))
+    game.me.update_play_from()
+    if not game.me.play_from: 
+        game.state = sc.Shit_State.PLAYING_DONE
     plinfos.pop(game.me.serv_nick)
 
     for pl in game:

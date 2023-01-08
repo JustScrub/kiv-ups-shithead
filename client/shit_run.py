@@ -22,6 +22,17 @@ class Shit_Comm:
         "WRITE": handle_write
     }
 
+    _reqs_by_states = {
+        Shit_State.MAIN_MENU: {"MAIN MENU", "MM CHOICE", "RECON","LOBBIES", "LOBBY STATE"},
+        Shit_State.LOBBY: {"LOBBY STATE", "GAME STATE", "LOBBIES"},
+        Shit_State.LOBBY_OWNER: {"LOBBY STATE", "LOBBY START", "GAME STATE", "LOBBIES"},
+        Shit_State.PLAYING_TRADING: {"TRADE NOW", "GAME STATE", "LOBBIES"},
+        Shit_State.PLAYING_WAITING: {"GAME STATE", "ON TURN", "TRADE NOW", "LOBBIES"},
+        Shit_State.PLAYING_ON_TURN: {"GIMME CARD", "GAME STATE", "ON TURN", "LOBBIES"},
+        Shit_State.PLAYING_DONE: {"GAME STATE", "ON TURN", "LOBBIES"},
+        Shit_State.RECON_WAIT: {"RECON"}
+    }
+
     def __init__(self, 
                  nick, 
                  serv_info=("127.0.0.1", 4444),
@@ -105,6 +116,7 @@ class Shit_Comm:
         if blackout:
             import random as rnd
         inp = ""
+        err_msg = ""
         ret = None
         shit_patience = self.SHIT_PATIENCE
         def handle_quit():
@@ -127,7 +139,7 @@ class Shit_Comm:
             #print(inp)
 
             if inp[0] not in self.handlers.keys():
-                print("Unknown command:", inp[0])
+                err_msg = f"Unknown command: {inp[0]}"
                 shit_patience -= 1
                 continue
 
@@ -142,10 +154,16 @@ class Shit_Comm:
                 continue
             self.sendall("ACKN")
 
+            #if inp[0] not in self._reqs_by_states[self.game.state]:
+            #    err_msg = f"Server desynchronization."
+            #    shit_patience -= 1
+            #    continue
+
             try:
                 ret = self.handlers[inp[0]](self.game, inp[1:])
             except Exception as e:
                 #self.game.serv_msg = "Error: " + str(e)
+                err_msg = "Error: " + str(e)
                 self.game.print()
                 shit_patience -= 1
             else:
@@ -157,7 +175,7 @@ class Shit_Comm:
                     self.sendall("^".join(ret))
                 shit_patience = self.SHIT_PATIENCE
 
-        raise Exception("Server is not responding")
+        raise Exception(err_msg)
 
 
 def connect(nick, serv_info, recon):
