@@ -1,24 +1,204 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage[IL2]{fontenc}
+\usepackage[czech]{babel}
+\usepackage{titling}
+\usepackage{indentfirst}
+\usepackage{graphicx}
+\usepackage{wrapfig}
+\usepackage{subcaption}
+
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=false, %set true if you want colored links
+    linktoc=all,     %set to all if you want both sections and subsections linked
+}
+
+\title{%
+Semestrální práce - online multiplayerová hra\\
+SHITHEAD\\
+\large KIV/UPS
+}
+\author{Jakub Mladý \\ scrub@students.zcu.cz}
+
+\date{Leden 2023}
+
+\begin{document}
+\begin{titlingpage}
+\begin{figure}
+    \includegraphics[scale=0.5]{fav_logo}
+\end{figure}
+
+\maketitle
+\end{titlingpage}
+
+\tableofcontents
+\newpage
+
 
 \section{Pravidla}
-Shithead je tahová karetní hra, používá se běžný žolíkový balíček bez žolíků. Barvy karet v pravidlech nehrají roli, pouze jejich hodnoty: 2 - 10, J, Q, K, A. Eso (karta A) má nejvyšší hodnotu, karta s hodnotou 1 není. Maximální počet hráčů závisí na počtu balíčků (a tedy celkovém početu karet). Každý hráč začíná s 9 kartami (viz dále), karet musí být tolik, aby každý na začátku obdržel tento počet karet. Při jednom standardním balíčku (52 karet) je maximální počet hráčů 5. Minimální počet je vždy 2.
+Shithead je tahová karetní hra, používá se běžný žolíkový balíček bez žolíků. Barvy karet v pravidlech nehrají roli, pouze jejich hodnoty: 2 - 10, J, Q, K, A. Eso (karta A) má nejvyšší hodnotu, karta s hodnotou 1 není. Maximální počet hráčů závisí na počtu balíčků (a tedy celkovém počtu karet). Každý hráč začíná s 9 kartami (viz dále), karet musí být tolik, aby každý na začátku obdržel tento počet karet. Při jednom standardním balíčku (52 karet) je maximální počet hráčů 5. Minimální počet je vždy 2.
 
 \subsection{Příprava hry}
-Každému hráči jsou náhodně rozdány 3 sady trojic karet. První trojici hráč drží v ruce a karty vidí pouze on. Druhá je vyložena na stůl lícem vzhůru tak, aby je viděli všichni hráči. Poslední sada je položena lícem dolů, takže je nezná nikdo, ani vlastník karet. Zbytek karet, který nebyl rozdán, je poležen na hromadu jako lízací balíček. Před začátek hry si hráči smí libovolně měnit karty lícem nahoru s kartami v ruce. Záčíná hrát ten hráč, který má v ruce kartu hodnoty 3. Pokud ji nemá nikdo, pak kartu hodnoty 4 a tak dále.
+Každému hráči jsou náhodně rozdány 3 sady trojic karet. První trojici hráč drží v ruce a karty vidí pouze on. Druhá je vyložena na stůl lícem vzhůru tak, aby je viděli všichni hráči. Poslední sada je položena lícem dolů, takže je nezná nikdo, ani vlastník karet. Zbytek karet, který nebyl rozdán, je položen na hromadu jako dobírací balíček. Před začátek hry si hráči smí libovolně měnit karty lícem nahoru s kartami v ruce. Začíná hrát ten hráč, který má v ruce kartu hodnoty 3. Pokud ji nemá nikdo, pak kartu hodnoty 4 a tak dále.
 
 \subsection{Hra}
-V každém tahu hráč hraje z jedné sady karet, kterou má u sebe. Pokud má karty v ruce, musí hrát z ruky. Pokud nemá karty v ruce, pak hraje kartami, jež všichni vidí. Po vyčerpání této sady hráč hraje s kartami, jejichž hodnotu nezná nikdo - hraje tedy na slepo. Pokud hráč může hrát, musí hrát. Pokud má hráč více karet stejného čísla a toto číslo může zahrát, smí zahrát jednu nebo více těchto karet naráz, všechny však musí být ze stejné sady. Například pokud má hráč v ruce 2 karty hodnoty dva a jednu takovou v sadě lícem nahoru, nemůže hrát všemi třemi kartami. Může ale zahrát obě dvojky z ruky a v pozdějším kole dvojku z druhé sady. Dokud je na stole i lízací balíček, hráči si musí na konci kola vzít do ruky tolik karet, aby měli alespoň 3 (pokud jich má víc, nebere nic).
+V každém tahu hráč hraje z jedné sady karet, kterou má u sebe. Pokud má karty v ruce, musí hrát z ruky. Pokud nemá karty v ruce, pak hraje kartami, jež všichni vidí. Po vyčerpání této sady hráč hraje s kartami, jejichž hodnotu nezná nikdo - hraje tedy na slepo. Pokud hráč může hrát, musí hrát. Pokud má hráč více karet stejného čísla a toto číslo může zahrát, smí zahrát jednu nebo více těchto karet naráz, všechny však musí být ze stejné sady. Například pokud má hráč v ruce 2 karty hodnoty dva a jednu takovou v sadě lícem nahoru, nemůže hrát všemi třemi kartami. Může ale zahrát obě dvojky z ruky a v pozdějším kole dvojku z druhé sady. Dokud je na stole i dobírací balíček, hráči si musí na konci kola vzít do ruky tolik karet, aby měli alespoň 3 (pokud jich má víc, nebere nic).
 
 Pro vykládání karet platí dvě základní pravidla: na prázdný stůl je možné zahrát cokoliv, na zahranou kartu pouze vyšší hodnotu. Z těchto pravidel však vybočují některé karty a situace, pro něž platí speciální pravidla:
 \begin{itemize}
     \item 8 - další hráč na tahu musí zahrát také 8, nebo se vzdát kola. Platí jen pro dalšího hráče, pokud ten 8 nezahraje, jinak se toto pravidlo posouvá dále... (Stejné jako např. pro eso ze hry Prší)
     \item 2 - může být zahrána na kteroukoliv kartu (kromě "aktivní" osmičky), i s větší hodnotou
-    \item 3 - "neviditelná" - může být zahrána na kteroukoliv kartu (kromě aktivní 8), ale v dalším tahu platí hodnota karty pod ní (pod všemi trojkami na sobě).
+    \item 3 - "neviditelná" - může být zahrána na kteroukoliv kartu (kromě aktivní 8), ale v dalším tahu platí hodnota karty pod ní (pod všemi trojkami na sobě). Neaktivuje 8, pokud je zahrána na ni.
     \item 7 - musí být zahrána karta s \emph{menší} hodnotou nebo 7. Platí jen, pokud je vrchní karta 7 (pravidlo nezůstává do dalších kol).
     \item 10 - může být zahrána na kteroukoliv jinou kartu (kromě aktivní 8). Pálí celý herní balíček vč. zahrané 10 a karty v něm se ve hře již neobjeví. Stejný hráč pak hraje ještě jednou.
-    \item Čtyři karty stejného čísla na sobě - stejné jako karta 10 (čtyři 10 nemají speciální pravidlo už jen proto, že se na sobě mohou objevit jen v případě, že je všechny zahrál jeden hráč...)
+    \item Čtyři karty stejného čísla na sobě - stejné jako karta 10 (čtyři 10 nemají speciální pravidlo už jen proto, že se na sobě mohou objevit jen v případě, že je všechny zahrál jeden hráč...). Bonusové kolo dostane ten hráč, který pálení zapříčinil na svém kole.
 \end{itemize}
 Pokud hráč nemá žádné karty, které by mohl zahrát, pak si do ruky bere celý odkládací balíček - tedy všechny dosud zahrané karty. Tím zároveň končí jeho tah. Pokud hráč hrál "na slepo" (ze sady lícem dolů), tak si do ruky také vezme celý odkládací balíček i se zahranou kartou. Pokud však hráč hraje na selpo na aktivní osmičku a vytažená karta není 8, pak mu v ruce zůstává pouze vybraná karta a pokračuje se dalším hráčem. Karty se v průběhu hry nikdy nedoplňují do sady lícem nahoru či dolů.
 
+Cílem hry je zbavit se všech karet. Hra nemá výherce per se, zato má poraženého, jímž je poslední hráč, kterému zbyly karty. Tento hráč je titulován "Shithead", volně přeloženo jako "poserhlava".
+
+\subsection{Implementace}
+Server řídí všechny dostupné hry a hráče, které (obojí) má uloženo v poli her resp. hráčů. Paralelismus je zajištěn vlákny - každý hráč v hlavním menu má své vlákno a každá hra (lobby i přímo hra) má také své vlákno. Na serveru dále běží další tři vlákna: na přijímání připojení, na ukončování hráčů ze hry (přesun do hlavního menu) a na mazání her. Po připojení je hráč vložen do hlavního menu a dotázán na přezdívku. Následně jsou mu zasílána dostupná lobby a je vyzýván k akci: připojení do lobby, vytvoření nového lobby nebo pokus o znovupřipojení do rozehrané hry. Lobby i samotná hra sídlí v jednom vlákně - při vytvoření lobby je tvůrce (vlastník) "přesunut" do nově vytvořeného vlákna hry a ve smyčce čeká, než se připojí do tohoto lobby další hráči. Při více než jednom hráči v lobby je vlastník vyzván ke startu lobby, což může ignorovat, nebo hru začít. Následně je hra inicializována a vejde se do herní smyčky. Před jejím začátkem je hráčům oznámen poč. stav hry a jsou postupně vyzýváni k dobrovolné výměně karet mezi rukou a sadou lícem nahoru. Pak je do konce hry (zbývá poslední hráč, který má ještě karty) postupně hráčům sdělován stav hry, kdo je další na řadě a tomu hráči je poslán požadavek na zahrání karet. Server kontroluje pravidla hry. Pokud hráč na kole nemá karty, které by mohl zahrát, je přeskočen (a do ruky jsou mu vloženy všechny karty "na stole" podle pravidel). Po skončení hry jsou všichni hráči vrácení do hlavního menu a hra je smazána.
+
+Implementace sad je následovná. Ruka hráče je pole 13 hodnot, každá z nich určuje, kolik má hráč daných karet (na indexu 0 je počet karet hodnoty 2 atd.). Sada lícem i rubem nahoru jsou tříprvková pole obsahující hodnoty karet nebo nulu, pokud na dané pozici karta není. Server sděluje hráči jeho ruku ve stejném formátu, ruku soupeřů ale pouze jako sumu prvků pole, tedy počet karet v ruce. Sada lícem nahoru je sdělována všem. Sada lícem dolů je maskována tak, že pokud je na dané pozici platná karta (2-14), pošle hráčům hodnotu 1, jinak 0. Hráči dále vidí vrchní kartu (neviditelné trojky hráč nevidí), počet karet v odkládacím balíku a počet karet v dobíracím balíčku. Díky tomu je zážitek z této online verze podobný reálné hře (až na odpudivý lidský kontakt a socializaci).
+
+Klientská aplikace slouží jako "vizualizér" zpráv ze serveru a prostředník mezi uživatelem a serverem. Poslouchá zprávy serveru a podle nich zobrazuje data nebo koriguje uživatele a vyzývá ho k daným akcím. Veškerý vstup kontroluje a také hlídá pravidla hry. Zároveň se snaží ošetřovat krátkodobé výpadky serveru připojováním zpět do hry a kontroluje validitu zpráv serveru.
+
+Překlad serveru je realizován nástrojem \verb|make| a Makefilem v kořenovém adresáři serveru. Je vyžadována podpora POSIXU. Klient je implementován v prog. jazyce python3.8+ s jedinou vnější závislostí: modulem \verb|pytimedinput|, stáhnutelným pomocí souboru \verb|install_deps.bat| (Windows) nebo \verb|install_deps.sh| (Linux). Následně lze klienta spustit příkazem 
+\begin{verbatim}
+    python3 shit_run.py <IP/hostname> <port>
+\end{verbatim}
+kde první argument je IP nebo DNS název serveru a druhý je port. Server je po překladu spustitelný příkazem \verb|./server <IP> <port>| (v kořenovém adresáři serveru), první argument je jedna z dostupných IP adres stroje (nebo 0 pro všechny) a druhý je port.
+
 \section{Komunikace a protokol}
 
-Aplikace klienta a serveru spolu komunikují jednoduchým "prefixovým" protokolem. Komunikace se dá přirovnat k manželství - server klientovi něco přikáže nebo ho o něčem informuje a klient musí poslušně přijmout. Klient sám od sebe nikdy žádnou zprávu neposílá, pouze potvrzuje či poskytuje data. Každá zpráva od serveru má jedinečný prefix. Zprávy, které nežádají data, klient potvrdí a tím je komunikace ukončena. Pokud server chce data od klienta, klient zprávu upět potvrdí a (případně, viz dál) pošle data od uživatele. Potrvzování má dvojí charakter: při obyčejném průběhu klient pošle řetězec "ACKN" ukončený znakem nového řádku. Pokud si všah uživatel přeje ukončit hru či klienta, klient pošle na server potvrzení "QUIT" - server pak ví, že klient s ním stále hovoří a že má hráče ukončit. Ukončení má za následek jednu ze dvou možností. Pokud "QUIT" přijde na zprávu "MM CHOICE" nebo "LOBBIES" (když je hráč v hlavním menu), klient je zcela ukončen
+Aplikace klienta a serveru spolu komunikují jednoduchým "prefixovým" protokolem. Komunikace se dá přirovnat k manželství - server klientovi něco přikáže nebo ho o něčem informuje a klient musí poslušně přijmout. Klient sám od sebe nikdy žádnou zprávu neposílá, pouze potvrzuje či poskytuje data. Každá zpráva od serveru má jedinečný prefix. Zprávy, které nežádají data, klient potvrdí a tím je komunikace ukončena. Pokud server chce data od klienta, klient zprávu opět potvrdí a (případně, viz dál) pošle data od uživatele. Potvrzování má dvojí charakter: při obyčejném průběhu klient pošle řetězec "ACKN" ukončený znakem nového řádku. Pokud si však uživatel přeje ukončit hru či klienta, klient pošle na server potvrzení "QUIT" - server pak ví, že klient s ním stále hovoří a že má hráče ukončit (buď vrátit to hlavního menu nebo odpojit, viz dále). Formát komunikace je následovný:
+
+\begin{enumerate}
+    \item \verb-ZPRAVA[^data...]\n-
+    \item \verb-ACKN\n- nebo \verb-QUIT\n-
+    \item \verb-[[ODPOVED^]data...\n]-
+\end{enumerate}
+Části v hranatých závorkách se objevují jen u některých zpráv, potvrzení je serveru zasláno na každou zprávu. Oddělovač dat je znak stříšky (\verb-^-).
+
+\begin{figure}
+    \centering
+    \includegraphics[scale=0.25]{client_msg_state.png}
+    \caption{Stavový diagram klienta. Hrany reprezentují komunikaci klienta a serveru nebo klienta a uživatele (část na žlutým "obdélníkem"). Některé stavy jsou vizuálně sdruženy - žlutý obdélník jsou stavy v hlavním menu, modrý reprezentuje lobby a zelený hru. Nejsou vyznačeny hrany pro ukončení - ze stavů pod hlavním menu vedou vždy do stavu "Main menu not reconnect", z kteréhokoliv stavu hlavního menu pak pryč (ukončení klienta). Odpojení klienta nebo serveru také vede pryč... }
+    \label{fig:client-states}
+\end{figure}
+
+Obrázek \ref{fig:client-states} reprezentuje stavový diagram klienta.
+
+\subsection{Zprávy}
+\subsubsection{MAIN MENU}
+Data: ID hráče, maximální velikost přezdívky (př.: \verb=MAIN MENU^15^11=)
+
+Očekávaná odpověď: NICK, zvolená přezdívka (př.: \verb|NICK^hrac1|)
+
+Reakce na QUIT: odpojení klienta
+
+První zpráva poslána klientovi hned po připojení. Vyzve uživatele k vybrání přezdívky ve hře.
+
+\subsubsection{LOBBIES}
+Data: seznam informací o dostupných lobby, informacemi jsou přezdívka vlastníka a počet hráčů v lobby. Tyto dva údaje jsou odděleny backtickem (\verb-`-). Příklad: \verb|LOBBIES^hrac1`1^hrac2`3|
+
+Očekávaná odpověď: není
+
+Reakce na QUIT: odpojení klienta
+
+Zpráva slouží ke sdělení dostupných lobby na serveru. Sděluje vlastníka (hráče, který lobby vytvořil) a počet hráčů v lobby.
+
+\subsubsection{MM CHOICE}
+Data: nejsou 
+
+Očekávaná odpověď: jedno z následujících:
+\begin{itemize}
+    \item LOBBY a pořadí lobby sděleného zprávou LOBBIES, počínaje jednou (a konče číslem odpov. počtu lobby her) (\verb|LOBBY^2|)
+    \item LOBBY a nula pro vytvoření nového lobby (\verb|LOBBY^0|)
+    \item RECON a údaje o předešlém připojení: přezdívka, ID hráče a ID hry (\verb|RECON^hrac2^5^14|)
+\end{itemize}
+
+Reakce na QUIT: odpojení klienta
+
+Zpráva vyzve uživatele k činnosti v hlavním menu. Uživatel má tři možnosti: přidat se do existujícího lobby, vytvořit lobby nebo se pokusit o připojení do hry, z níž se odpojil.
+
+\subsubsection{RECON}
+Data: jedno z:
+\begin{itemize}
+    \item I: Připojení do hry není momentálně možné, pokus se dá opakovat později. (\verb|RECON^I|)
+    \item F: Připojení do hry již není možné. Hráč si musí vybrat jinou možnost v hlavním menu. (\verb|RECON^F|)
+    \item R a "nové" údaje (přezdívka, ID hráče a ID hry): Připojení proběhlo úspěšně. (\verb|RECON^R^hrac4^5^6|)
+\end{itemize}
+
+Očekávaná odpověď: není 
+
+Reakce na QUIT: návrat do hlavního menu
+
+Informuje hráče o tom, jak dopadl pokus o připojení.
+
+\subsubsection{LOBBY STATE}
+Data: seznam hráčů v lobby. První záznam je vlastník. Příklad: \verb|LOBBY STATE^vlastnik^hrac1^honza|
+
+Očekávaná odpověď: není 
+
+Reakce na QUIT: návrat do hlavního menu
+
+Sděluje hráči, kdo je s ním v lobby (a kdo je vlastníkem).
+
+\subsubsection{LOBBY START}
+Data: nejsou 
+
+Očekávaná odpověď: \verb|YES| nebo \verb|NO| (bez identifikátoru odpovědi) 
+
+Reakce na QUIT: návrat do hlavního menu, zároveň vrátí všechny přítomné do hlavního menu (ukončení vlastníka lobby)
+
+Zeptá se vlastníka lobby, zda má server začít hru.
+
+\subsubsection{GAME STATE}
+Data: seznam informací o hráčích ve hře. Informace obsahují tři části: přezdívka, ruka, karty lícem nahoru a karty lícem dolů. Ruka je v případě přijemce seznam počtů jednotlivých karet, které má hráč v ruce (13 čísel oddělených čárkou, první je počet karet 2 atd. až po počet es), informace o ostatních hráčích namísto karet posílají počet karet v ruce. Karty lícem nahoru jsou v případě všech hráčů 3 znaky reprezentující karty. Karty jsou "kódovány" ASCII znakem 0x30 + hodnota karty. Karty lícem dolů jsou také 3 znaky, buď 1 nebo 0. Jedna značí, že na dané pozici karta je, 0 značí, že již byla zahrána. Položky informací jsou odděleny backtickem (\verb|`|). Za těmito informacemi hráčů následuje trojice čísel: vrchní (viditelná) karta, počet karet v hracím balíčku a počet karet v dobíracím balíčku. Tato čísla jsou mezi sebou oddělena backtickem. Příklad pro hráče "franta": \verb|GAME STATE^franta`2,0,0,0,0,0,0,0,1,0,0,0,0`6=3`111^hrac1`3`6<=`111^0`0`34| (znak \verb|=| znamená kartu K, znak \verb|<| kartu Q). Franta má 2 dvojky a desítku v ruce, před sebou má karty 6, K a 3 a z karet lícem dolů nezahrál žádnou. Hráč hrac1 má v ruce 3 karty, před sebou 6, Q a K a také nehrál naslepo. Na stole není zahraná žádná karta (hodnota 0 a velikost herního balíčku 0), v dobíracím balíku je 34 karet (zpráva byla poslána na začátku hry).
+
+Očekávaná odpověď: není 
+
+Reakce na QUIT: návrat do hlavního menu
+
+Tato zpráva posílá informace o aktuální hrané hře. 
+
+\subsubsection{TRADE NOW}
+Data: nejsou 
+
+Očekávaná odpověď: TRADE a trojice karet, které chce hráč mít v balíčku lícem nahoru (v tomto pořadí). Karty jsou zakódovány jako ASCII znaky s hodnotou 0x30 + hodnota karty. Příklad: \verb|TRADE^8;3|, hráč si přeje vyměnit karty tak, aby měl před sebou karty 8, J a 3.
+
+Reakce na QUIT: návrat do hlavního menu
+
+Zpráva vyzve hráče k vyměňování karet před začátkem hry.
+
+\subsubsection{ON TURN}
+Data: přezdívka hráče, který přichází na řadu. Př.: \verb|ON TURN^pepa457| 
+
+Očekávaná odpověď: není 
+
+Reakce na QUIT: návrat do hlavního menu
+
+Oznámí hráčům, kdo je na řadě.
+
+\subsubsection{GIMME CARD}
+Data: nejsou 
+
+Očekávaná odpověď: CARD a pokud hráč hraje z ruky nebo ze sady lícem nahoru, tak karta (opět zakódovaná hodnotou ASCII) a počet, kolik jich hráč chce zahrát. Pokud hraje naslepo, tak index karty (pořadí mínus jedna), kterou chce zahrát, a libovolné číslo větší než 0 a menší než počet karet stejného čísla v balíku... Příklad pro hru z ruky: \verb|CARD^>^2| (hraje dvě esa), pro hru naslepo: \verb|CARD^2^1| (hraje třetí (!) kartu z karet lícem naruby).
+
+Reakce na QUIT: návrat do hlavního menu
+
+Vyzve hráče k vyložení karet.
+
+\subsubsection{WRITE}
+Data: libovolný řetězec ASCII znaků. Příklad:  \verb|WRITE^shithead: karel|  (Sděluje, že hráč karel je shithead, tedy že prohrál hru.)
+
+Očekávaná odpověď: není 
+
+Reakce na QUIT: návrat do hlavního menu
+
+Pošle klientovi krátkou informační zprávu.
+
+\end{document}
