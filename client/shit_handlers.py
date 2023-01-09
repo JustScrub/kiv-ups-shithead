@@ -68,6 +68,7 @@ def handle_mm_choice( game, inp):
             if ret < 1 or ret > game.lobby_cnt:
                 game.serv_msg = "Invalid lobby number"
                 continue
+            game.serv_msg = f"Connecting to lobby {ret}..."
             return ["LOBBY", str(ret)]
 
 def handle_recon( game, inp):
@@ -243,7 +244,7 @@ def handle_trade_now( game, inp):
 
         game.me.trade([_card_vals[x] for x in ret])
         game.state = sc.Shit_State.PLAYING_WAITING
-        game.serv_msg = ["TRADE", "".join([_card_names[x] for x in ret])]
+        #game.serv_msg = ["TRADE", "".join([_card_names[x] for x in ret])]
         return ["TRADE", "".join([_card_names[x] for x in ret])]
 
 def handle_gimme_card( game, inp):

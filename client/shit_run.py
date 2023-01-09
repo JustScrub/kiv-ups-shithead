@@ -131,7 +131,12 @@ class Shit_Comm:
             self._quit_thread_ctrl(True)
 
             with self._sock.makefile("r") as f:
-                inp = f.readline()
+                try:
+                    inp = f.readline()
+                except Exception as e:
+                    err_msg = "Connection Error:" + str(e)
+                    shit_patience -= 1
+                    continue
             if not inp:
                 shit_patience -= 1
                 continue
@@ -163,7 +168,7 @@ class Shit_Comm:
                 ret = self.handlers[inp[0]](self.game, inp[1:])
             except Exception as e:
                 #self.game.serv_msg = "Error: " + str(e)
-                err_msg = "Error: " + str(e)
+                err_msg = "Communication Error: " + str(e)
                 self.game.print()
                 shit_patience -= 1
             else:
@@ -258,8 +263,12 @@ def main():
             print("Connection failed")
             break
         if communicate(gm, blackout):
+            gm.end()
+            gm = None
             break
-    gm.end()
+
+    if gm is not None:
+        gm.end()
 
     if platform.system() == "Linux":
         os.system("reset")

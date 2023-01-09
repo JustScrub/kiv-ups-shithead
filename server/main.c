@@ -149,6 +149,7 @@ void *mm_player_thread(void *arg)
 
     pthread_mutex_lock(&gm_mutex);
     if(choice){
+        printD("Connect lobby: nick=%s\n",pl->nick);
         choice--;
         for(i=0;i<MAX_GAMES;i++){
             if(games[i] && games[i]->id == lobbies[choice].gid){
@@ -163,6 +164,8 @@ void *mm_player_thread(void *arg)
             goto mm_win;
         }
 
+        printD("Found lobby: nick=%s,game=%d\n", pl->nick, games[choice]->id);
+
         // check the game is still in lobby mode - might have changed where gm_mutex was unlocked
         if(games[choice]->state != GM_LOBBY || 
            game_player_count(games[choice]) == MAX_PLAYERS ||
@@ -172,6 +175,7 @@ void *mm_player_thread(void *arg)
             if(ret != COMM_OK) goto player_exit;
             goto mm_win;
         }
+        printD("Lobby entered: %s\n",pl->nick);
 
         pthread_mutex_unlock(&gm_mutex);
         free(lobbies);

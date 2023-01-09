@@ -57,9 +57,11 @@ bool game_add_player(game_t *game,player_t *pl)
 
     if(i<=MAX_PLAYERS)
     {
+        printD("add player: adding player %s to %d\n", pl->nick,game->id);
         pl->game_id = game->id;
         game->players[i] = pl;
         if(pl->state != PL_MAIN_MENU){
+            printD("add player: %s reconnect to %d\n", pl->nick, game->id);
             char *bfr = malloc(sizeof(char) + sizeof(recon_cache_t));
             *bfr = 'R';
             recon_cache_t rc = { .id = pl->id, .gid = game->id};
@@ -70,8 +72,11 @@ bool game_add_player(game_t *game,player_t *pl)
             pl->comm_if.conn_state = PL_CONN_UP;
         }
         pl->state = game->state == GM_LOBBY? PL_LOBBY : PL_PLAYING_WAITING;
+        if(pl->state == PL_LOBBY)
+            game_comm(game,i,SRRQ_LOBBY_STATE,game, sizeof(game_t *));
         return true;
     }
+    printD("add player: refused %s to %d\n",pl->nick, game->id);
     return false;
 }
 
@@ -86,6 +91,7 @@ int game_player_count(game_t *game)
             cnt++;
         }
     }
+    printD("Player count: id=%d,cnt=%d\n",game->id,cnt);
     return cnt;
 }
 
