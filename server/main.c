@@ -376,6 +376,7 @@ void start_serv(char *ip_s, char *port_s)
     servaddr.sin_port = htons((uint16_t)port);
    
     // Binding newly created socket to given IP and verification
+    setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&(int){ 1 },sizeof(int));
     if ((bind(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr))) != 0) {
         printf("socket bind failed...\n");
         exit(0);
